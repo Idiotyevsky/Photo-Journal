@@ -1,0 +1,41 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const source=fs.readFileSync('ui/fullscreen.js','utf8');
+const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};};
+function setup({desktop=false,supported=true,bridge=null}={}){
+ const events={window:{},document:{}},errors=[],calls={request:0,exit:0};
+ const button={attributes:{},disabled:false,innerHTML:'',classList:{toggle(){}},setAttribute(name,value){this.attributes[name]=value;}};
+ const listen=target=>(name,handler,capture)=>(events[target][name]??=[]).push({handler,capture});
+ const emit=(target,name,event={})=>{for(const {handler} of events[target][name]||[])handler(event);};
+ const window={location:{search:desktop?'?desktop=1':''},pywebview:bridge,addEventListener:listen('window')};
+ const document={fullscreenEnabled:supported,fullscreenElement:null,documentElement:{},modalOpen:false,addEventListener:listen('document'),querySelector:()=>document.modalOpen?{}:null,querySelectorAll:()=>[button]};
+ if(supported){document.documentElement.requestFullscreen=async()=>{calls.request++;document.fullscreenElement=document.documentElement;emit('document','fullscreenchange');};document.exitFullscreen=async()=>{calls.exit++;document.fullscreenElement=null;emit('document','fullscreenchange');};}
+ vm.runInNewContext(source,{window,document,URLSearchParams,console});
+ const api=window.ShiguangFullscreen;api.configure({onError:message=>errors.push(message)});
+ const key=(key,extra={})=>{const event={key,defaultPrevented:false,stopped:false,repeat:false,preventDefault(){this.defaultPrevented=true;},stopImmediatePropagation(){this.stopped=true;},...extra};emit('document','keydown',event);return event;};
+ return {api,window,document,button,calls,errors,events,emit,key};
+}
+const pressed=context=>context.api.renderButton().includes('aria-pressed="true"');
+const disabled=context=>context.button.disabled;
+const flush=()=>new Promise(resolve=>setImmediate(resolve));
+(async()=>{
+ const browser=setup();await browser.api.initialize();await browser.api.initialize();assert.equal(browser.events.document.keydown.length,1);assert.equal(browser.events.document.keydown[0].capture,true);assert.equal(disabled(browser),false);assert(browser.api.renderButton().includes('全屏（F11）'));
+ await browser.api.handleToggle();assert.equal(browser.calls.request,1);assert(pressed(browser));assert.equal(browser.button.attributes.title,'退出全屏（Esc）');await browser.api.handleToggle();assert.equal(browser.calls.exit,1);assert.equal(pressed(browser),false);
+ browser.document.fullscreenElement=browser.document.documentElement;browser.emit('document','fullscreenchange');assert(pressed(browser));browser.document.fullscreenElement=null;browser.emit('document','fullscreenchange');assert.equal(pressed(browser),false);
+ const pending=deferred();browser.document.documentElement.requestFullscreen=()=>{browser.calls.request++;return pending.promise;};const first=browser.api.handleToggle();assert(disabled(browser));assert.equal(await browser.api.handleToggle(),false);assert.equal(browser.calls.request,2);browser.document.fullscreenElement=browser.document.documentElement;pending.resolve();await first;assert(pressed(browser));assert.equal(disabled(browser),false);
+ const unavailable=setup({supported:false});await unavailable.api.initialize();assert(disabled(unavailable));assert.equal(await unavailable.api.handleToggle(),false);assert.equal(unavailable.errors.length,0);
+ const native=setup({desktop:true});await native.api.initialize();assert(disabled(native));assert.equal(await native.api.handleToggle(),false);assert.equal(native.calls.request,0,'native waiting never falls back to DOM');
+ let full=false,gets=0,sets=[];native.window.pywebview={platform:'edgechromium',api:{get_fullscreen:async()=>{gets++;return {fullscreen:full};},set_fullscreen:async value=>{sets.push(value);full=value;native.emit('window','shiguangfullscreenchange',{detail:{fullscreen:full}});return {fullscreen:full};}}};native.emit('window','pywebviewready');await native.api.initialize();assert.equal(gets,1);assert.equal(disabled(native),false);await native.api.handleToggle();assert.deepEqual(sets,[true]);assert(pressed(native));assert.equal(native.calls.request,0);
+ native.document.modalOpen=true;const dialogEsc=native.key('Escape');assert.equal(dialogEsc.defaultPrevented,false);assert.equal(dialogEsc.stopped,false);assert.equal(sets.length,1,'Esc first belongs to the open app dialog');native.document.modalOpen=false;
+ const composition=native.key('Escape',{isComposing:true});assert.equal(composition.defaultPrevented,false);assert.equal(native.key('Escape',{keyCode:229}).defaultPrevented,false);assert.equal(sets.length,1);
+ assert.equal(native.key('Escape',{repeat:true}).defaultPrevented,true);assert.equal(sets.length,1);assert.equal(native.key('Escape').stopped,true);await flush();assert.equal(full,false);assert.equal(pressed(native),false);assert.equal(native.key('Escape').defaultPrevented,false,'ordinary Esc is untouched outside fullscreen');
+ const beforeF11=sets.length;assert.equal(native.key('F11',{repeat:true}).defaultPrevented,true);assert.equal(sets.length,beforeF11);assert.equal(native.key('F11').stopped,true);await flush();assert.equal(full,true);assert(pressed(native));
+ const nativePending=deferred();native.window.pywebview.api.set_fullscreen=value=>{sets.push(value);return nativePending.promise;};const changing=native.api.handleToggle();const setCount=sets.length;assert.equal(await native.api.handleToggle(),false);assert.equal(sets.length,setCount);full=false;nativePending.resolve({fullscreen:false});await changing;assert.equal(pressed(native),false);
+ native.window.pywebview.api.set_fullscreen=async()=>{throw new Error('native failure');};assert.equal(await native.api.handleToggle(),false);assert.equal(pressed(native),false);assert.equal(native.errors.length,1);assert.equal(native.calls.request,0,'native failure never uses DOM');
+ native.window.pywebview.api.set_fullscreen=async()=>({fullscreen:'true'});assert.equal(await native.api.handleToggle(),false);assert.equal(pressed(native),false);assert.equal(native.errors.length,2,'unconfirmed native response is an error');
+ full=true;native.emit('window','shiguangfullscreenchange',{detail:{fullscreen:true}});assert(pressed(native));native.document.fullscreenElement=null;native.emit('document','fullscreenchange');assert(pressed(native),'DOM event cannot overwrite native window state');native.emit('window','shiguangfullscreenchange',{detail:{fullscreen:'false'}});assert(pressed(native),'invalid native event ignored');
+ const bad=setup({desktop:true,bridge:{platform:'edgechromium',api:{get_fullscreen(){throw new Error('sync read failure');},set_fullscreen:async()=>({fullscreen:false})}}});bad.api.configure({onError(){throw new Error('UI callback failure');}});assert.equal(await bad.api.initialize(),false);assert(disabled(bad));assert.equal(bad.calls.request,0);bad.window.pywebview.api.get_fullscreen=async()=>({fullscreen:false});bad.emit('window','pywebviewready');assert.equal(await bad.api.initialize(),true,'failed initialization can retry without an unhandled rejection');assert.equal(disabled(bad),false);
+ const missing=setup({desktop:true});await missing.api.initialize();missing.emit('window','pywebviewready');await flush();assert(disabled(missing));assert.equal(missing.errors.length,1);assert.equal(missing.calls.request,0);
+ const ordinary=setup({bridge:{api:{}}});await ordinary.api.initialize();await ordinary.api.handleToggle();assert.equal(ordinary.calls.request,1,'an uninitialized object in source preview is not a native bridge');
+ const domError=setup();await domError.api.initialize();domError.document.documentElement.requestFullscreen=async()=>{throw new Error('permission denied');};assert.equal(await domError.api.handleToggle(),false);assert.equal(pressed(domError),false);assert.equal(domError.errors.length,1);
+ console.log('PASS: native-ready handshake and confirmed states; browser fallback; no native-to-DOM fallback; busy/idempotent toggles; external state changes; F11; modal-first Esc; IME/repeat guards; unsupported and rejected APIs; safe initialization errors.');
+})().catch(error=>{console.error(error);process.exitCode=1;});

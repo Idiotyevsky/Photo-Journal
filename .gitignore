@@ -1,0 +1,35 @@
+# Personal library and local application state
+album-data/
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+.env
+.env.*
+
+# Local Python environments and generated files
+.venv/
+venv/
+.desktop-venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.spec
+
+# Packaging, QA and historical development artifacts
+.desktop-build/
+.desktop-qa/
+.qa*/
+.release*/
+.repo-cleanup/
+.backups/
+build/
+dist/
+*.exe
+*.lnk
+*.log
+.shiguang-runtime.json
+/验证记录.json
+/桌面验证.json
+/*预览*.png
+/*预览*.jpg
+/作品集视频实际画面.jpg

@@ -1,0 +1,13 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const plays=[],audios=[];
+class Audio {constructor(){this.dataset={};this.events={};this.paused=true;this.error=null;}setAttribute(){}addEventListener(n,f){this.events[n]=f;}pause(){this.paused=true;}play(){this.paused=false;return new Promise((resolve,reject)=>plays.push({resolve,reject}));}}
+const document={querySelectorAll:()=>[],dispatchEvent:()=>{},body:{append:audio=>audios.push(audio)},createElement:()=>new Audio()};
+const window={events:{},addEventListener(n,f){this.events[n]=f;}};
+const tracks=[{id:'hymn',title:'Hymn',attribution:"'Hymn' by Scott Buckley",artist:'Scott Buckley',url:'/audio/hymn.mp3',origin:'builtin',enabled:false},{id:'local_a',title:'A',url:'/media/music/local_a.wav',origin:'imported',enabled:true},{id:'local_b',title:'B',url:'/media/music/local_b.flac',origin:'imported',enabled:true}];
+vm.runInNewContext(fs.readFileSync('ui/music.js','utf8'),{window,document,CustomEvent:class {},Math:Object.assign(Object.create(Math),{random:()=>0}),fetch:async()=>({ok:true,json:async()=>({tracks})}),Promise,console});
+(async()=>{
+ const music=window.ShiguangMusic;await music.load();assert.equal(audios.length,0,'startup must remain silent');music.setVolume(.35);music.handleToggle();assert.equal(music.current().id,'local_a');assert.equal(audios[0].volume,.35);music.stop();assert.equal(audios[0].muted,true);music.handleToggle();assert.equal(music.current().id,'local_b','random must avoid last track');plays[0].reject(new Error('late failure'));await Promise.resolve();await Promise.resolve();assert.equal(music.current().playing,true,'stale play rejection must not stop newer selection');
+ music.previewTrack('hymn');assert.equal(music.current().id,'hymn','disabled music may be auditioned');assert.equal(music.current().preview,true);audios[0].events.ended();assert.equal(music.current().playing,false,'audition must stop after one track');music.handleToggle();assert.notEqual(music.current().id,'hymn');music.setLibrary([]);assert.equal(music.current().playing,false,'removing currently playing music must stop it');
+ music.setLibrary(tracks);music.setVolume(2);music.previewTrack('local_a');assert.equal(audios[0].volume,1);window.events.pagehide();assert.equal(audios[0].paused,true);music.setLibrary([{...tracks[0],title:'用户重命名'}]);assert.ok(music.renderCredits().includes('Hymn'),'source attribution keeps original title');
+ console.log('PASS: silent startup; enabled-only random; no immediate repeats; stale playback isolation; disabled-track audition; audition end; library removal; volume; cleanup; original attribution.');
+})().catch(error=>{console.error(error);process.exit(1)});
