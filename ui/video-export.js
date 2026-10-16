@@ -135,7 +135,7 @@
   }
   function renderModal(current){
     const body=`<div class="video-export-layout"><div class="video-export-preview">${stageMarkup(current)}<p class="video-export-error" id="video-export-playback-error" role="alert"></p><div class="video-export-summary"><strong>${esc(current.title)}</strong><span id="video-export-estimate">${current.photoCount} 张照片 · 预计 ${time(duration(current))}</span></div><div id="video-export-job-status">${jobMarkup(current)}</div>${current.pollError?`<div class="video-export-error" role="alert"><p>${esc(current.pollError)}</p><button class="inline-link" data-action="video-poll-retry">重新查询进度</button></div>`:''}</div><div class="video-export-options"><div id="video-export-fields">${formMarkup(current)}</div><p class="video-export-limit" id="video-export-limit" role="status">${esc(limitMessage(current))}</p>${current.error?`<p class="video-export-error" role="alert">${esc(current.error)}</p>`:''}</div></div>`;
-    return host.modalFrame('导出视频','16:9 · 照片居中 · 柔雾玻璃背景 · 淡入淡出',body,footerMarkup(current),'video-export-modal');
+    return host.modalFrame('导出视频','16:9 · 照片居中 · 柔雾质感背景 · 淡入淡出',body,footerMarkup(current),'video-export-modal');
   }
   function syncCreateButton(current){
     const button=document.getElementById('video-create');if(button)button.disabled=!canCreate(current);

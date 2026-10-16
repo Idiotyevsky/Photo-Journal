@@ -14,7 +14,8 @@ import wave
 
 from PIL import Image, ImageChops, ImageOps
 
-from video_export import VideoExportError, _glass_edge, _glass_mask, _rounded_mask, compose_video_slide, encode_slideshow, find_ffmpeg, render_video_preview
+from photo_export import render_framed_photo
+from video_export import VideoExportError, _background_grain, _rounded_mask, _video_background, compose_video_slide, encode_slideshow, find_ffmpeg, render_video_preview
 
 
 class VideoExportTests(unittest.TestCase):
@@ -46,11 +47,11 @@ class VideoExportTests(unittest.TestCase):
             self.assertEqual(preview.size, (960, 540))
             self.assertTrue(all(abs(a-b)<4 for a,b in zip(preview.getpixel((480,270)), (181,90,69))))
             self.assertTrue(all(channel>245 for channel in preview.getpixel((480,450))))
-            # Keep the entire original white edge. The short frosted transition
-            # starts outside it and returns to background within a few pixels.
+            # The white strip ends cleanly, with no extended bright glass halo.
             self.assertTrue(all(channel>245 for channel in preview.getpixel((480,485))))
             self.assertTrue(all(channel>245 for channel in preview.getpixel((480,478))))
-            self.assertGreater(max(preview.getpixel((480,487))),max(preview.getpixel((480,494)))+30)
+            self.assertLess(max(abs(a-b) for a,b in zip(preview.getpixel((480,487)),preview.getpixel((480,494)))),12)
+            self.assertGreater(min(preview.getpixel((480,485))),max(preview.getpixel((480,487)))+50)
             self.assertLess(max(abs(a-b) for a,b in zip(preview.getpixel((480,491)),preview.getpixel((480,494)))),10)
             # The surround is colored and darker than the crisp photo, not an
             # empty black/white pillarbox or a stretched full-screen image.
@@ -107,32 +108,42 @@ class VideoExportTests(unittest.TestCase):
         with _rounded_mask((31, 17), 0) as square:
             self.assertEqual(square.getextrema(), (255, 255), 'zero radius preserves the fully opaque rectangular fallback')
 
-    def test_glass_collar_follows_round_corners_and_keeps_its_short_width(self):
-        size, border, radius = (236, 156), 8, 16
-        with _glass_mask(size, border, radius) as rounded, _glass_mask(size, border) as rectangular:
-            width, height = size
-            self.assertEqual(rounded.getpixel((width // 2, height // 2)), 255)
-            for point in ((0, 0), (width - 1, 0), (0, height - 1), (width - 1, height - 1), (width // 2, 0), (width // 2, height - 1), (0, height // 2), (width - 1, height // 2)):
-                self.assertEqual(rounded.getpixel(point), 0, 'the outermost collar boundary is transparent')
-            for point in ((border, border), (width - border - 1, border), (border, height - border - 1), (width - border - 1, height - border - 1)):
-                self.assertLess(rounded.getpixel(point), 64, 'the discarded print corners cannot leave an opaque square glass patch')
-                self.assertEqual(rectangular.getpixel(point), 255, 'this assertion distinguishes rounded glass from the old rectangular mask')
-            transition = [rounded.getpixel((width // 2, y)) for y in range(border + 1)]
-            self.assertEqual(transition, sorted(transition))
-            self.assertTrue(any(0 < value < 255 for value in transition))
-            self.assertEqual(transition[-1], 255)
-            self.assertEqual(transition, [rectangular.getpixel((width // 2, y)) for y in range(border + 1)], 'round corners do not widen or alter the straight glass transition')
-            for transpose in (Image.Transpose.FLIP_LEFT_RIGHT, Image.Transpose.FLIP_TOP_BOTTOM):
-                with rounded.transpose(transpose) as mirrored, ImageChops.difference(rounded, mirrored) as difference:
-                    self.assertIsNone(difference.getbbox(), 'the glass collar follows all four corners symmetrically')
-        with Image.new('RGB', (220, 140), (80, 120, 150)) as photograph:
-            glass, mask = _glass_edge(photograph, border, radius)
+    def test_background_is_luminous_with_subtle_neutral_deterministic_texture(self):
+        size, color = (640, 360), (120, 150, 180)
+        luminance = lambda rgb: .2126 * rgb[0] + .7152 * rgb[1] + .0722 * rgb[2]
+        with Image.new('RGB', (512, 320), color) as photograph:
+            before = photograph.tobytes()
+            _background_grain.cache_clear()
+            first = _video_background(photograph, size)
+            # Regenerate the texture rather than merely reusing cached bytes.
+            _background_grain.cache_clear()
+            repeated = _video_background(photograph, size)
+            with patch('video_export._background_grain', return_value=bytes([128]) * (size[0] * size[1])):
+                smooth = _video_background(photograph, size)
             try:
-                self.assertEqual(glass.size, size)
-                self.assertEqual(mask.size, size, 'rounded glass keeps exactly the original two-sided collar dimensions')
-                self.assertLess(mask.getpixel((border, border)), 64, 'glass edge actually uses the rounded mask')
+                self.assertEqual(first.size, size)
+                self.assertEqual(first.mode, 'RGB')
+                self.assertEqual(first.tobytes(), repeated.tobytes(), 'freshly generated texture is stable across repeated renders')
+                self.assertEqual(photograph.tobytes(), before, 'background effects never mutate the photograph')
+                for point in ((0, 0), (639, 0), (0, 359), (639, 359), (320, 180)):
+                    light = luminance(first.getpixel(point))
+                    self.assertGreater(light, luminance(color) * .84, 'even the corners retain the brighter background light')
+                    self.assertLess(light, luminance(color) * 1.08, 'soft light does not wash the photograph colors out')
+                with ImageChops.subtract(first, smooth, offset=128) as delta:
+                    red, green, blue = delta.split()
+                    try:
+                        with ImageChops.difference(red, green) as red_green, ImageChops.difference(green, blue) as green_blue:
+                            self.assertIsNone(red_green.getbbox(), 'grain is neutral rather than colored speckle')
+                            self.assertIsNone(green_blue.getbbox())
+                        low, high = red.getextrema()
+                        self.assertGreaterEqual(low, 126)
+                        self.assertLessEqual(high, 130)
+                        self.assertLess(low, 128)
+                        self.assertGreater(high, 128, 'a small real texture remains within two tonal levels of the matte background')
+                    finally:
+                        red.close(); green.close(); blue.close()
             finally:
-                glass.close(); mask.close()
+                first.close(); repeated.close(); smooth.close()
 
     def test_composed_round_print_preserves_clear_edges_white_strip_and_rectangular_video(self):
         for source, size in ((self.first, (960, 540)), (self.second, (960, 540)),
@@ -140,28 +151,48 @@ class VideoExportTests(unittest.TestCase):
             with self.subTest(photo=source.name, resolution=size):
                 captured = {}
 
-                def capture_edge(print_image, border, radius=0):
-                    captured.update(print=print_image.copy(), border=border, radius=radius)
-                    return _glass_edge(print_image, border, radius)
+                def capture_background(photograph, target_size):
+                    background = _video_background(photograph, target_size)
+                    captured['background'] = background.copy()
+                    return background
 
-                with patch('video_export._glass_edge', side_effect=capture_edge):
+                def capture_mask(print_size, radius):
+                    mask = _rounded_mask(print_size, radius)
+                    captured.update(mask=mask.copy(), radius=radius)
+                    return mask
+
+                with patch('video_export._video_background', side_effect=capture_background), patch('video_export._rounded_mask', side_effect=capture_mask):
                     frame = compose_video_slide(source, self.meta, self.assets, size)
-                reference = captured['print']
+                with Image.open(BytesIO(render_framed_photo(source, self.meta, self.assets, preview=True))) as print_image:
+                    reference = print_image.convert('RGB')
+                reference.thumbnail((round(size[0] * .78), round(size[1] * .80)), Image.Resampling.LANCZOS)
+                mask, background = captured['mask'], captured['background']
                 try:
                     self.assertEqual(frame.size, size, 'only the photo card is rounded; the video canvas stays rectangular')
                     self.assertEqual(frame.mode, 'RGB')
                     self.assertGreater(captured['radius'], 0)
-                    self.assertEqual(captured['border'], max(2, round(12 * size[0] / 1920)), 'rounding does not enlarge the glass collar')
+                    self.assertEqual(mask.mode, 'L')
+                    self.assertEqual(mask.size, reference.size)
                     width, height = reference.size
                     x, y = (size[0] - width) // 2, (size[1] - height) // 2
                     for px, py in ((width // 2, 0), (0, height // 2), (width - 1, height // 2), (width // 2, height - 1), (width // 2, height // 2)):
                         self.assertEqual(frame.getpixel((x + px, y + py)), reference.getpixel((px, py)), 'print centre and straight edge middles remain exactly sharp and opaque')
                     self.assertTrue(all(channel > 245 for channel in frame.getpixel((x + width // 2, y + height - 1))), 'the central white information strip remains intact')
+                    # Compare every fully opaque print pixel and every fully
+                    # transparent background pixel, allowing only contour AA.
+                    with frame.crop((x, y, x + width, y + height)) as print_area, ImageChops.difference(print_area, reference) as difference, mask.point(lambda value: 255 if value == 255 else 0) as opaque, opaque.convert('RGB') as opaque_rgb, ImageChops.multiply(difference, opaque_rgb) as changed:
+                        self.assertIsNone(changed.getbbox(), 'all opaque photo/EXIF pixels remain exactly crisp')
+                    with Image.new('L', size, 0) as full_mask:
+                        full_mask.paste(mask, (x, y))
+                        with full_mask.point(lambda value: 255 if value == 0 else 0) as outside, outside.convert('RGB') as outside_rgb, ImageChops.difference(frame, background) as difference, ImageChops.multiply(difference, outside_rgb) as leaked:
+                            self.assertIsNone(leaked.getbbox(), 'nothing blurs or glows beyond the rounded print contour')
+                    for point in ((x - 1, y + height // 2), (x + width, y + height // 2), (x + width // 2, y - 1), (x + width // 2, y + height)):
+                        self.assertEqual(frame.getpixel(point), background.getpixel(point), 'the first exterior pixel is already the unmodified matte background')
                     for px, py in ((0, 0), (width - 1, 0), (0, height - 1), (width - 1, height - 1)):
                         actual, square = frame.getpixel((x + px, y + py)), reference.getpixel((px, py))
                         self.assertGreater(max(abs(a - b) for a, b in zip(actual, square)), 8, 'every original rectangular corner reveals the soft surround rather than an opaque square print')
                 finally:
-                    frame.close(); reference.close()
+                    frame.close(); reference.close(); mask.close(); background.close()
 
     def test_mp4_contains_real_dissolve_and_looped_audio_to_exact_duration(self):
         audio=self.root/'short.wav'

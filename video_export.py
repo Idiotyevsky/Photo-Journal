@@ -1,7 +1,9 @@
-"""Local MP4 slideshows with a crisp framed print on a soft glass surround."""
+"""Local MP4 slideshows with a crisp rounded print on a luminous matte backdrop."""
+from functools import lru_cache
 from io import BytesIO
 import math
 import os
+import random
 from pathlib import Path
 import shutil
 import subprocess
@@ -51,71 +53,34 @@ def _rounded_mask(size: tuple[int, int], radius: int) -> Image.Image:
     return mask
 
 
-def _glass_mask(size: tuple[int, int], border: int, radius: int = 0) -> Image.Image:
-    """A short outward transition; its fully opaque centre is covered by the print."""
+@lru_cache(maxsize=4)
+def _background_grain(size: tuple[int, int]) -> bytes:
+    """Fixed, neutral fine grain stays still throughout every dissolve."""
+    with Image.frombytes("L", size, random.Random(1749).randbytes(size[0] * size[1])) as noise:
+        with noise.point(lambda value: 128 + round((value - 127.5) / 64)) as grain:
+            return grain.tobytes()
+
+
+def _video_background(photograph: Image.Image, size: tuple[int, int]) -> Image.Image:
+    """Keep the photograph's soft colors, with brighter light and a fine matte finish."""
     width, height = size
-
-    def smooth(value):
-        t = max(0., min(1., value))
-        return round(255 * t * t * (3 - 2 * t))
-
-    across = Image.new("L", (width, 1))
-    across.putdata([smooth(min(x, width - 1 - x) / border) for x in range(width)])
-    down = Image.new("L", (1, height))
-    down.putdata([smooth(min(y, height - 1 - y) / border) for y in range(height)])
-    horizontal = across.resize(size)
-    vertical = down.resize(size)
-    mask = ImageChops.multiply(horizontal, vertical)
-    across.close(); down.close(); horizontal.close(); vertical.close()
-    radius = max(0, min(radius, (width - border * 2) // 2, (height - border * 2) // 2))
-    if radius:
-        # The same inner corner continues outward by exactly `border` pixels.
-        # Only the small corner patches need radial distance calculations.
-        outer = radius + border
-        corner = Image.new("L", (outer, outer))
-        corner.putdata([smooth((outer - math.hypot(outer - x, outer - y)) / border)
-                        for y in range(outer) for x in range(outer)])
-        mask.paste(corner, (0, 0))
-        right = corner.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
-        bottom = corner.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
-        opposite = corner.transpose(Image.Transpose.ROTATE_180)
-        mask.paste(right, (width - outer, 0))
-        mask.paste(bottom, (0, height - outer))
-        mask.paste(opposite, (width - outer, height - outer))
-        corner.close(); right.close(); bottom.close(); opposite.close()
-    return mask
-
-
-def _glass_edge(print_image: Image.Image, border: int, radius: int = 0) -> tuple[Image.Image, Image.Image]:
-    """Continue only the outer edge pixels into a thin frosted-glass collar."""
-    width, height = print_image.size
-    expanded = Image.new("RGB", (width + border * 2, height + border * 2))
-    expanded.paste(print_image, (border, border))
-    strips = (
-        ((0, 0, 1, height), (border, height), (0, border)),
-        ((width - 1, 0, width, height), (border, height), (width + border, border)),
-        ((0, 0, width, 1), (width, border), (border, 0)),
-        ((0, height - 1, width, height), (width, border), (border, height + border)),
-    )
-    for crop, size, position in strips:
-        edge = print_image.crop(crop).resize(size)
-        expanded.paste(edge, position)
-        edge.close()
-    draw = ImageDraw.Draw(expanded)
-    for point, box in (
-        ((0,0),(0,0,border-1,border-1)),
-        ((width-1,0),(width+border,0,width+border*2-1,border-1)),
-        ((0,height-1),(0,height+border,border-1,height+border*2-1)),
-        ((width-1,height-1),(width+border,height+border,width+border*2-1,height+border*2-1)),
-    ):
-        draw.rectangle(box, fill=print_image.getpixel(point))
-    frosted = expanded.filter(ImageFilter.GaussianBlur(max(.6, border * .45)))
-    expanded.close()
-    frosted = ImageEnhance.Color(frosted).enhance(.75)
-    white = Image.new("RGB", frosted.size, (245, 249, 253))
-    glass = Image.blend(frosted, white, .12)
-    frosted.close(); white.close()
-    return glass, _glass_mask(glass.size, border, radius)
+    scale = width / 1920
+    with ImageOps.fit(photograph, (max(1, width // 4), max(1, height // 4)), Image.Resampling.LANCZOS) as small:
+        with small.filter(ImageFilter.GaussianBlur(13 * scale)) as soft:
+            enlarged = soft.resize(size, Image.Resampling.BICUBIC)
+    with enlarged:
+        color = ImageEnhance.Color(enlarged).enhance(.78)
+    with color:
+        light = ImageEnhance.Brightness(color).enhance(.98)
+    with light, Image.new("RGB", size, (250, 248, 245)) as pearl:
+        illuminated = Image.blend(light, pearl, .025)
+    with Image.radial_gradient("L").resize(size, Image.Resampling.BICUBIC) as gradient:
+        vignette = gradient.point(lambda value: round(value * .12))
+    with illuminated, vignette, Image.new("RGB", size, (24, 29, 34)) as shade:
+        background = Image.composite(shade, illuminated, vignette)
+    with background, Image.frombytes("L", size, _background_grain(size)) as grain:
+        with grain.convert("RGB") as texture:
+            return ImageChops.add(background, texture, offset=-128)
 
 
 def compose_video_slide(original_path: Path, photo_dict: dict, assets_dir: Path, size=(1920, 1080)) -> Image.Image:
@@ -126,36 +91,17 @@ def compose_video_slide(original_path: Path, photo_dict: dict, assets_dir: Path,
         framed = source.convert("RGB")
     # The background uses the photograph alone, without smearing its white bar.
     photograph = framed.crop((0, 0, framed.width, framed.height - framed_border_height(framed.width)))
-    small = ImageOps.fit(photograph, (max(1, width // 4), max(1, height // 4)), Image.Resampling.LANCZOS)
+    background = _video_background(photograph, size)
     photograph.close()
-    soft = small.filter(ImageFilter.GaussianBlur(13 * scale))
-    small.close()
-    background = soft.resize(size, Image.Resampling.BICUBIC)
-    soft.close()
-    background = ImageEnhance.Color(background).enhance(.78)
-    background = ImageEnhance.Brightness(background).enhance(.81).convert("RGBA")
-    # A broad vignette gives the glass surround depth without a hard dark frame.
-    vignette = Image.radial_gradient("L").resize(size, Image.Resampling.BICUBIC).point(lambda value: round(value * .21))
-    shade = Image.new("RGBA", size, (17, 22, 28, 0))
-    shade.putalpha(vignette)
-    background = Image.alpha_composite(background, shade)
-    shade.close(); vignette.close()
 
     framed.thumbnail((round(width * .78), round(height * .80)), Image.Resampling.LANCZOS)
     x, y = (width - framed.width) // 2, (height - framed.height) // 2
     radius = min(round(24 * scale), round(min(framed.size) * .055))
-    # The print stays crisp inside its rounded contour. The narrow glass collar
-    # follows that same contour, including the four curved corners.
-    border = max(2, round(12 * scale))
-    glass, mask = _glass_edge(framed, border, radius)
-    background.paste(glass, (x - border, y - border), mask)
-    glass.close(); mask.close()
+    # Only antialias the rounded contour; there is no blur, glow or expanded edge.
     rounded = _rounded_mask(framed.size, radius)
     background.paste(framed, (x, y), rounded)
     framed.close(); rounded.close()
-    result = background.convert("RGB")
-    background.close()
-    return result
+    return background
 
 
 def render_video_preview(original_path: Path, photo_dict: dict, assets_dir: Path) -> bytes:
