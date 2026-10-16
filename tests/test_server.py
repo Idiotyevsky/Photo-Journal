@@ -18,6 +18,7 @@ from unittest.mock import Mock, patch
 from urllib.parse import quote, unquote
 
 import server
+import online_music
 
 try:
     from PIL import Image
@@ -82,6 +83,33 @@ class MP3HeaderTests(unittest.TestCase):
         for header in malformed:
             with self.subTest(header=header):
                 self.assertFalse(server.audio_header_valid(header + b"\0" * 2048 + frames, ".mp3"))
+
+
+class OnlineMusicNetworkTests(unittest.TestCase):
+    def test_only_public_provider_hosts_and_https_redirects_are_accepted(self):
+        public = [(2, 1, 6, '', ('8.8.8.8', 443))]
+        with patch('online_music.socket.getaddrinfo', return_value=public):
+            self.assertEqual(online_music.public_url('http://m801.music.126.net/song.mp3'), 'https://m801.music.126.net/song.mp3')
+            for url in ('file:///secret', 'http://127.0.0.1/', 'https://evil.example/music',
+                        'https://music.126.net.evil.example/a', 'https://user@music.126.net/a',
+                        'https://music.126.net:123/a', 'https://music.126.net/\\secret'):
+                with self.subTest(url=url), self.assertRaises(online_music.OnlineMusicError):
+                    online_music.public_url(url)
+        for ip in ('127.0.0.1', '192.168.1.1', '169.254.169.254', '::1', '::ffff:127.0.0.1'):
+            with patch('online_music.socket.getaddrinfo', return_value=[(2, 1, 6, '', (ip, 443))]):
+                with self.assertRaises(online_music.OnlineMusicError):
+                    online_music.public_url('https://music.126.net/a.mp3')
+
+    def test_download_limits_truncation_and_redirect_destinations(self):
+        for body, headers, maximum in ((b'a' * 11, {}, 10), (b'a', {'Content-Length': '11'}, 10), (b'a', {'Content-Length': '3'}, 10)):
+            response = io.BytesIO(body); response.headers = headers
+            opener = Mock(); opener.open.return_value = response
+            with patch('online_music.public_url', side_effect=lambda value:value), patch('online_music.build_opener', return_value=opener):
+                with self.assertRaises(online_music.OnlineMusicError):
+                    online_music.fetch_bytes('https://music.126.net/a.mp3', maximum)
+        with patch('online_music.public_url', side_effect=online_music.OnlineMusicError(502, 'unsafe')):
+            with self.assertRaises(online_music.OnlineMusicError):
+                online_music._Redirects().redirect_request(Mock(full_url='https://music.126.net/a'), None, 302, '', {}, 'http://localhost/private')
 
 
 @unittest.skipUnless(Image, "Pillow is needed for image integration checks")
@@ -1399,6 +1427,66 @@ class AlbumTests(unittest.TestCase):
         self.assertEqual(list(self.server.store.music_dir.iterdir()), [])
         self.assertEqual(len(self.request("GET", "/api/music")[1]["tracks"]), 3)
         self.assertEqual(self.request("GET", photo["url"])[1], self.image)
+
+    def test_online_music_search_preview_import_and_migration_are_local(self):
+        audio = self.wav_audio()
+        calls=[]
+        def fetch(url, maximum, **_kwargs):
+            calls.append(url)
+            if 'types=search' in url:
+                return json.dumps([{'id':'track-1','name':'海边 / 晨光','artist':['摄影配乐'],'album':'旅途','source':'netease'}]).encode()
+            if 'types=url' in url:
+                return json.dumps({'url':'https://music.126.net/test.wav'}).encode()
+            return audio
+        with patch('online_music.fetch_bytes', side_effect=fetch), patch('online_music.public_url', side_effect=lambda value:value):
+            status, found = self.json_request('POST','/api/music/online/search',{'query':'海边'})
+            self.assertEqual(status,200); token=found['tracks'][0]['token']
+            self.assertNotIn('id',found['tracks'][0])
+            self.assertEqual(self.json_request('POST','/api/music/online/search',{'query':'海边'})[1],found)
+            self.assertEqual(len(calls),1,'repeat searches use cache')
+            self.assertEqual(self.server.store.music()['tracks'][-1]['origin'],'builtin')
+            self.assertEqual(self.json_request('POST','/api/music/online/preview',{'token':token})[0],200)
+            self.assertFalse(self.server.store.music_dir.exists(),'a preview creates no library file')
+            status,result=self.json_request('POST','/api/music/online/import',{'token':token})
+            self.assertEqual(status,201);track=result['track']
+            self.assertEqual((track['title'],track['artist'],track['origin']),('海边 / 晨光','摄影配乐','imported'))
+            self.assertEqual(self.server.store.music_path(track['id'],'.wav').read_bytes(),audio)
+            self.server.store.update_music(track['id'],{'title':'自己改的曲名'})
+            again=self.json_request('POST','/api/music/online/import',{'token':token})
+            self.assertEqual(again[0],200);self.assertTrue(again[1]['duplicate']);self.assertEqual(again[1]['track']['title'],'自己改的曲名')
+            self.assertEqual(sum('types=url' in url for url in calls),1,'preview and import reuse the resolved URL')
+            with self.server.store.backup_archive(self.application_file) as archive:
+                with zipfile.ZipFile(archive) as package:
+                    music_name=next(name for name in package.namelist() if name.endswith('/music/'+track['id']+'.wav'))
+                    self.assertEqual(package.read(music_name),audio)
+
+    def test_online_music_rejects_bad_requests_expired_results_and_foreign_websites(self):
+        with patch('online_music.fetch_bytes') as fetch:
+            for value in ({'query':''},{'query':'x','source':'other'},{'query':'x','source':[]},{'query':'x','page':True},{'query':'x'*81}):
+                self.assertEqual(self.json_request('POST','/api/music/online/search',value)[0],400)
+            self.assertEqual(self.json_request('POST','/api/music/online/import',{'token':'missing'})[0],410)
+            self.assertEqual(self.json_request('POST','/api/music/online/import',{'url':'https://music.126.net/a'})[0],400)
+            for action in ('search','preview','import'):
+                self.assertEqual(self.request('POST','/api/music/online/'+action,b'{}',{'Content-Type':'application/json','Origin':'https://evil.example'})[0],403)
+            fetch.assert_not_called()
+
+    def test_online_music_unavailable_audio_and_rate_limit_leave_library_unchanged(self):
+        client=self.server.online_music; before=self.server.store.music()
+        token='a'*32
+        import time
+        client._records[token]=(time.monotonic(),{'token':token,'id':'id','source':'netease','title':'test','artist':''})
+        with patch('online_music.fetch_bytes', return_value=b'{"url":""}'):
+            self.assertEqual(self.json_request('POST','/api/music/online/import',{'token':token})[0],404)
+        with patch.object(client,'preview',return_value={'url':'https://music.126.net/a'}),patch('online_music.fetch_bytes',return_value=b'<html>not audio</html>'):
+            self.assertEqual(self.json_request('POST','/api/music/online/import',{'token':token})[0],415)
+        client._urls[token]=(time.monotonic(),'https://music.126.net/expired.mp3')
+        with patch.object(client,'preview',return_value={'url':'https://music.126.net/expired.mp3'}),patch('online_music.fetch_bytes',side_effect=online_music.OnlineMusicError(502,'expired')):
+            self.assertEqual(self.json_request('POST','/api/music/online/import',{'token':token})[0],502)
+            self.assertNotIn(token,client._urls,'a failed download resolves a fresh URL on retry')
+        client._requests.extend([time.monotonic()]*40)
+        with patch('online_music.fetch_bytes') as fetch:
+            self.assertEqual(self.json_request('POST','/api/music/online/search',{'query':'test'})[0],429);fetch.assert_not_called()
+        self.assertEqual(self.server.store.music(),before)
 
     def test_path_traversal_and_static_boundary(self):
         self.assertEqual(self.request("GET", "/")[0], 200)

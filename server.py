@@ -25,6 +25,7 @@ import zipfile
 
 from video_jobs import VideoJobError, VideoJobManager
 from color_analysis import ColorAnalysis, ColorAnalysisError
+from online_music import OnlineMusic, OnlineMusicError
 
 try:
     from PIL import Image, ImageOps, UnidentifiedImageError
@@ -514,7 +515,7 @@ class AlbumStore:
             raise ApiError(404, "这首音乐不在曲库中。")
         return track
 
-    def import_music(self, data: bytes, filename: str) -> dict:
+    def import_music(self, data: bytes, filename: str, *, title: str | None = None, artist: str = "") -> dict:
         if not data:
             raise ApiError(400, "音乐文件为空。")
         if len(data) > MAX_MUSIC_BYTES:
@@ -525,6 +526,8 @@ class AlbumStore:
         if not filename or filename in {".", ".."} or any(character in filename for character in "/\\:") or any(ord(character) < 32 for character in filename):
             raise ApiError(400, "音乐文件名不正确，请选择文件而非文件路径。")
         extension = Path(filename).suffix.lower()
+        title = clean_text(title, 120, "音乐名称") if title is not None else Path(filename).stem[:120]
+        artist = clean_text(artist, 120, "音乐作者")
         if extension not in AUDIO_MIME:
             raise ApiError(415, "支持导入 MP3、WAV、M4A、AAC、OGG 和 FLAC 音乐。")
         if not audio_header_valid(data, extension):
@@ -545,7 +548,7 @@ class AlbumStore:
             try:
                 with target.open("xb") as content:
                     content.write(data)
-                db.execute("INSERT INTO music_tracks(id,origin,title,original_name,extension,sha256,size,imported_at) VALUES(?,'imported',?,?,?,?,?,?)", (track_id, Path(filename).stem[:120] or "未命名音乐", filename, extension, digest, len(data), now()))
+                db.execute("INSERT INTO music_tracks(id,origin,title,artist,original_name,extension,sha256,size,imported_at) VALUES(?,'imported',?,?,?,?,?,?,?)", (track_id, title or "未命名音乐", artist, filename, extension, digest, len(data), now()))
                 result = {"track": self.require_music(db, track_id), "duplicate": False}
                 # Explicit commit keeps a failed commit inside the file rollback block.
                 db.commit()
@@ -1163,6 +1166,7 @@ class AlbumHTTPServer(ThreadingHTTPServer):
         self.store = AlbumStore(data_dir, self.web_dir)
         self.colors = ColorAnalysis(self.store)
         self.video_jobs = VideoJobManager(self.store, self.web_dir / "assets")
+        self.online_music = OnlineMusic(self.store)
         super().__init__(("127.0.0.1", port), AlbumHandler)
 
     def server_close(self):
@@ -1218,7 +1222,7 @@ class AlbumHandler(BaseHTTPRequestHandler):
             video_create = re.fullmatch(r"/api/collections/([a-f0-9]{32})/video", path)
             video_preview = re.fullmatch(r"/api/collections/([a-f0-9]{32})/video-preview", path)
             video_job = re.fullmatch(r"/api/video-jobs/([a-f0-9]{32})(/file)?", path)
-            self.security_check(require_same_origin=path in {"/api/backup", "/api/colors"} or any(item is not None for item in (framed, video_create, video_preview, video_job)))
+            self.security_check(require_same_origin=path in {"/api/backup", "/api/colors"} or path.startswith("/api/music/online/") or any(item is not None for item in (framed, video_create, video_preview, video_job)))
             query = parse_qs(target.query, keep_blank_values=True)
             store = self.server.store
             if self.command in {"GET", "HEAD"}:
@@ -1276,6 +1280,10 @@ class AlbumHandler(BaseHTTPRequestHandler):
                     self.send_json(202, {"job": self.server.video_jobs.start(video_create.group(1), self.read_json())})
                 elif path == "/api/settings":
                     self.send_json(200, store.update_settings(self.read_json()))
+                elif path in {"/api/music/online/search", "/api/music/online/preview", "/api/music/online/import"}:
+                    methods = {"search": self.server.online_music.search, "preview": self.server.online_music.preview, "import": self.server.online_music.import_track}
+                    result = methods[path.rsplit("/", 1)[1]](self.read_json(8192))
+                    self.send_json(201 if path.endswith("/import") and not result.get("duplicate") else 200, result)
                 elif path == "/api/music/import":
                     content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
                     if content_type not in AUDIO_IMPORT_TYPES:
@@ -1323,7 +1331,7 @@ class AlbumHandler(BaseHTTPRequestHandler):
                 self.send_json(200, store.delete_journal(path[len("/api/journals/"):]))
             else:
                 raise ApiError(405, "不支持这个操作。")
-        except (ApiError, VideoJobError, ColorAnalysisError) as error:
+        except (ApiError, VideoJobError, ColorAnalysisError, OnlineMusicError) as error:
             self.close_connection = True
             self.send_json(error.status, {"error": error.message})
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):

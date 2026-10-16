@@ -88,6 +88,10 @@
 
 内置 Scott Buckley 的九首完整录音：Hymn、The Long Way Home、Castles in the Sky、Reverie、A Kind Of Hope、Sleep（官方纯钢琴版）、Midvinter、Moonlight、Solace，均采用 CC BY 4.0 许可，未作剪辑。官方来源与署名致谢见 [背景音乐说明](ui/audio/CREDITS.md)，也可在相册的「使用与保存说明」中查看。
 
+在「设置 → 背景音乐」点击「在线导入」，可以通过 [GD音乐台](https://music.gdstudio.xyz/) 搜索歌名、歌手或专辑，切换网易云、JOOX、哔哩哔哩音乐源，试听后选择导入。搜索和试听需要联网；音频成功导入后保存在本地曲库，可离线播放、参与随机播放、用于视频配乐，并包含在完整迁移包中。曲名、作者一同保存，重复导入不会覆盖已经修改的曲名。
+
+音乐源可能临时不可用，遇到空结果、无可用音频或访问频率限制时，可稍后重试或更换来源。接口资料及署名见 [在线音乐说明](assets/third-party/ONLINE-MUSIC.md)。
+
 ## 关闭、备份与迁移
 
 点击窗口右上角关闭即可，资料会保留，本地服务也会随窗口关闭。导入进行中请等待完成后再关闭。
@@ -135,7 +139,7 @@
 
 本项目仅提供 Windows 桌面 APP，启动入口为 desktop.py。ui/ 是桌面窗口的内嵌界面资源；server.py 是随窗口启动、关闭的内部本地服务，不提供独立网站启动方式。
 
-其他源码为 color_analysis.py（本地色彩统计）、photo_export.py（白边图片导出）、video_export.py 与 video_jobs.py（视频制作和任务）。发布程序已经包含 Python、视频编码组件和所需库，日常使用只需双击 EXE。
+其他源码为 color_analysis.py（本地色彩统计）、photo_export.py（白边图片导出）、video_export.py 与 video_jobs.py（视频制作和任务）、online_music.py（在线选曲与本地导入）。发布程序已经包含 Python、视频编码组件和所需库，日常使用只需双击 EXE。
 
 开发环境需要 Python 3.12，在项目目录运行：
 
