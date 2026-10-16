@@ -14,6 +14,8 @@
 
 打开作品集后，可以批量导入新照片，也可以点击「从已有照片添加」。同一张照片可以属于多个作品集，原图只保存一份。编辑作品集可以修改名称、简介和封面；移出作品集或删除作品集不会删除原图。
 
+点击作品集内的「编排照片」，可拖动照片调整先后顺序，也可以用每张照片下的前后移动按钮。点击「保存顺序」后，作品集默认按编排浏览；取消则保留原来的顺序。仍可临时切换拍摄时间、导入时间或名称排序，切换不会改写编排。新加入的照片接在末尾，重复导入不打乱已有顺序；每份作品集独立保存，完整迁移包也会带走编排。
+
 ## 批量导入与管理
 
 点击「导入照片」，然后选择：
@@ -53,7 +55,7 @@
 
 打开作品集，点击「导出视频」，即可将其中的照片制作为 MP4：**16:9 · 照片居中 · 柔雾质感背景 · 淡入淡出**。画面中央展示带相机标识和拍摄参数的紧凑白边照片，四角呈柔和圆角，四周由同张照片的柔和色彩铺开。照片与圆角边缘保持清晰；背景适度提亮，搭配轻微细颗粒纹理和柔和光影。
 
-默认使用 1080p、每张停留 5 秒，按拍摄时间由早及晚排列；也可选择 720p、调整停留时间或倒序播放。配乐只从自己导入的音乐中选择，可试听、调节音量，也可选择无配乐；没有音乐时，可前往「设置 → 背景音乐」导入。
+默认使用 1080p、每张停留 5 秒，按作品集保存的编排顺序播放，预览也展示这一顺序的首张照片；仍可选择按拍摄时间由早及晚或倒序播放，也可选择 720p、调整停留时间。配乐只从自己导入的音乐中选择，可试听、调节音量，也可选择无配乐；没有音乐时，可前往「设置 → 背景音乐」导入。
 
 弹窗中显示实际生成的画面预览，开始导出后可查看进度或取消。导出期间可以关闭弹窗继续浏览，相册保持打开即可；再次打开该作品集的「导出视频」会恢复进度。一次支持最多 300 张照片、30 分钟视频。
 
@@ -143,7 +145,7 @@
 
 验证：
 
-    python -m unittest -v test_desktop test_desktop_downloads test_server test_photo_export test_video_api test_video_export test_color_analysis test_colors_api
+    python -m unittest -v test_desktop test_desktop_downloads test_server test_collection_order test_photo_export test_video_api test_video_export test_color_analysis test_colors_api
     node --check ui/app.js
     node test_atlas.cjs
     node test_atlas_vector.cjs
@@ -153,6 +155,7 @@
     node test_video_export.cjs
     node test_colors.cjs
     node test_colors_app.cjs
+    node test_collection_order.cjs
 
 测试使用临时目录，不修改个人照片。
 

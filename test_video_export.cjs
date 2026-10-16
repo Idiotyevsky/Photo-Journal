@@ -46,6 +46,7 @@ function setup({count=3,tracks=[{id:TRACK,title:'<自己的音乐>',origin:'impo
 (async()=>{
   const context=setup();await context.open();
   assert.equal(context.state.modal.photoCount,3);assert.equal(context.state.modal.options.resolution,'1080p');assert.equal(context.state.modal.options.volume,.5);
+  assert.equal(context.state.modal.options.order,'collection');assert(context.html.includes('按作品集编排'));assert(context.elements.get('video-export-still').src.endsWith('order=collection'));
   assert.equal(context.state.modal.tracks.length,1,'only imported music is offered, including disabled tracks');
   assert(context.html.includes('旅行 &lt;作品&gt;'));assert(context.elements.get('video-export-fields').innerHTML.includes('&lt;自己的音乐&gt;'));
   assert(context.html.includes('16:9 · 照片居中 · 柔雾质感背景 · 淡入淡出'));

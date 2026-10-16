@@ -78,13 +78,13 @@ class VideoJobManager:
         allowed = {"resolution", "seconds_per_photo", "order", "music_id", "volume"}
         if not isinstance(value, dict) or set(value) - allowed:
             raise VideoJobError(400, "视频导出设置中包含不支持的字段。")
-        result = {"resolution": "1080p", "seconds_per_photo": 5, "order": "oldest", "music_id": None, "volume": 0.5, **value}
+        result = {"resolution": "1080p", "seconds_per_photo": 5, "order": "collection", "music_id": None, "volume": 0.5, **value}
         if result["resolution"] not in ("1080p", "720p"):
             raise VideoJobError(400, "请选择 1080p 或 720p 清晰度。")
         if type(result["seconds_per_photo"]) is not int or result["seconds_per_photo"] not in (3, 4, 5, 6, 8, 10):
             raise VideoJobError(400, "每张照片的时长应为 3、4、5、6、8 或 10 秒。")
-        if result["order"] not in ("oldest", "newest"):
-            raise VideoJobError(400, "请选择按拍摄时间由早到晚或由晚到早。")
+        if result["order"] not in ("collection", "oldest", "newest"):
+            raise VideoJobError(400, "请选择作品集编排或有效的拍摄时间顺序。")
         music_id = result["music_id"]
         if music_id is not None and (not isinstance(music_id, str) or not _ID.fullmatch(music_id)):
             raise VideoJobError(400, "请选择自行导入的背景音乐，或选择无配乐。")
@@ -137,7 +137,8 @@ class VideoJobManager:
         if not collection:
             raise VideoJobError(404, "这份作品集不存在。")
         direction = "ASC" if order == "oldest" else "DESC"
-        photos = db.execute("SELECT p.* FROM photos p JOIN collection_photos cp ON cp.photo_id = p.id WHERE cp.collection_id = ? ORDER BY p.taken_at " + direction + ",p.imported_at " + direction + ",p.id " + direction + " LIMIT ?", (collection_id, limit)).fetchall()
+        ordering = "cp.position,cp.added_at,cp.rowid" if order == "collection" else "p.taken_at " + direction + ",p.imported_at " + direction + ",p.id " + direction
+        photos = db.execute("SELECT p.* FROM photos p JOIN collection_photos cp ON cp.photo_id = p.id WHERE cp.collection_id = ? ORDER BY " + ordering + " LIMIT ?", (collection_id, limit)).fetchall()
         if not photos:
             raise VideoJobError(400, "这份作品集还没有照片，请先添加照片。")
         return collection["title"], photos
@@ -147,7 +148,7 @@ class VideoJobManager:
             raise VideoJobError(404, "照片文件标识异常，无法导出视频。")
         return self._media(self.store.originals, row["id"] + row["extension"], "原图")
 
-    def preview(self, collection_id: str, order: str = "oldest") -> bytes:
+    def preview(self, collection_id: str, order: str = "collection") -> bytes:
         self.options({"order": order})
         with self.store.lock, self.store.connect() as db:
             _title, photos = self._collection(collection_id, order, db, limit=1)

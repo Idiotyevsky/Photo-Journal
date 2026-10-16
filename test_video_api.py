@@ -148,10 +148,10 @@ class VideoAPITests(unittest.TestCase):
         finished = self.wait_job(job["id"])
         self.assertEqual((finished["photo_count"], finished["progress"], finished["duration"]), (2, 100, 9.2))
         call = self.calls[0]
-        self.assertEqual([photo["id"] for _path, photo in call["slides"]], [self.first["id"], self.second["id"]])
-        self.assertEqual(call["photo_bytes"], [self.first_bytes, self.second_bytes])
+        self.assertEqual([photo["id"] for _path, photo in call["slides"]], [self.second["id"], self.first["id"]])
+        self.assertEqual(call["photo_bytes"], [self.second_bytes, self.first_bytes])
         self.assertEqual(call["music_bytes"], self.audio)
-        self.assertEqual(call["options"], {"resolution": "1080p", "seconds_per_photo": 5, "order": "oldest", "music_id": self.track["id"], "volume": 0.5})
+        self.assertEqual(call["options"], {"resolution": "1080p", "seconds_per_photo": 5, "order": "collection", "music_id": self.track["id"], "volume": 0.5})
         self.assertEqual(call["assets"], self.web / "assets")
         directory = call["output"].parent
         self.assertFalse((directory / "sources").exists())
@@ -179,12 +179,26 @@ class VideoAPITests(unittest.TestCase):
     def test_preview_selects_actual_first_photo_without_creating_job(self):
         status, headers, body = self.request("GET", self.preview_path)
         self.assertEqual((status, headers["Content-Type"], body), (200, "image/jpeg", self.preview_bytes))
-        self.assertEqual(self.previewer.call_args.args[1]["id"], self.first["id"])
+        self.assertEqual(self.previewer.call_args.args[1]["id"], self.second["id"])
         self.assertEqual(self.request("GET", self.preview_path + "?order=newest")[0], 200)
         self.assertEqual(self.previewer.call_args.args[1]["id"], self.second["id"])
         for query in ("order=other", "order=oldest&order=newest", "path=C:/private.jpg"):
             self.assertEqual(self.request("GET", self.preview_path + "?" + query)[0], 400)
         self.assertFalse(self.service.video_jobs.root.exists())
+
+    def test_saved_portfolio_order_drives_default_preview_and_encoding(self):
+        third,_=self.photo('green','2024-05-01T12:00:00')
+        self.service.store.add_collection_photos(self.collection['id'],{'photo_ids':[third['id']]})
+        wanted=[self.first['id'],self.second['id'],third['id']]
+        self.service.store.reorder_collection_photos(self.collection['id'],{'photo_ids':wanted})
+        self.assertEqual(self.request('GET',self.preview_path)[0],200)
+        self.assertEqual(self.previewer.call_args.args[1]['id'],self.first['id'])
+        completed=self.wait_job(self.start()['id'])
+        self.assertEqual(completed['status'],'completed')
+        self.assertEqual(self.calls[0]['options']['order'],'collection')
+        self.assertEqual([photo['id'] for _,photo in self.calls[0]['slides']],wanted)
+        self.assertEqual(self.request('GET',self.preview_path+'?order=oldest')[0],200)
+        self.assertEqual(self.previewer.call_args.args[1]['id'],self.first['id'])
 
     def test_video_routes_strictly_reject_other_origins_and_unmanaged_ids(self):
         completed = self.wait_job(self.start()["id"])
@@ -217,7 +231,7 @@ class VideoAPITests(unittest.TestCase):
                 for _ in range(count):
                     photo = {**source, "id": uuid.uuid4().hex, "sha256": uuid.uuid4().hex}
                     db.execute("INSERT INTO photos(" + ",".join(photo) + ") VALUES(" + ",".join("?" for _ in photo) + ")", tuple(photo.values()))
-                    db.execute("INSERT INTO collection_photos VALUES(?,?,?)", (collection["id"], photo["id"], server.now()))
+                    db.execute("INSERT INTO collection_photos(collection_id,photo_id,added_at) VALUES(?,?,?)", (collection["id"], photo["id"], server.now()))
             status, _headers, result = self.request("POST", "/api/collections/" + collection["id"] + "/video", {"seconds_per_photo": seconds})
             self.assertEqual(status, 400)
             self.assertIn("300" if count > 300 else "30", result["error"])
@@ -259,7 +273,7 @@ class VideoAPITests(unittest.TestCase):
         self.assertEqual(self.request("DELETE", "/api/photos/" + self.first["id"])[0], 200)
         self.release.set()
         self.wait_job(job["id"])
-        self.assertEqual(self.calls[0]["photo_bytes"], [self.first_bytes, self.second_bytes])
+        self.assertEqual(self.calls[0]["photo_bytes"], [self.second_bytes, self.first_bytes])
         original = self.service.store.originals / (self.second["id"] + ".jpg")
         parked = self.root / "parked.jpg"
         original.replace(parked)

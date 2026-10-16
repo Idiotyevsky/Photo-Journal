@@ -41,6 +41,7 @@
   window.ShiguangSettings?.configure({getState:()=>state,api,modalFrame,showModal,renderModal,closeModal,toast,icon});
   window.ShiguangVideoExport?.configure({getState:()=>state,api,modalFrame,showModal,renderModal,closeModal,toast,icon});
   window.ShiguangColors?.configure({getState:()=>state,api,icon,redraw:()=>{if(state.view==='colors'&&!state.scope)updateCollection();},openPhoto,openPhotos:openColorPhotos});
+  window.ShiguangCollectionOrder?.configure({getState:()=>state,api,icon,modalFrame,showModal,renderModal,closeModal,toast,redraw:render,storeCollection:collection=>{storeCollection(collection);if(currentCollection()?.id===collection.id){state.sort='collection';state.layout='grid';}}});
   const navs = [ ['collections','folder','作品集'], ['photos','grid','全部照片'], ['timeline','clock','时间轴'], ['colors','palette','色彩足迹'], ['places','pin','拍摄地点'], ['journal','book','旅行手记'], ['favorites','heart','我的收藏'] ];
   function openColorPhotos({title,photoIds}) {
     state.scope={type:'color',title,photoIds:[...photoIds]};
@@ -103,7 +104,7 @@
     const collection = collectionRecord(id);
     if (!collection) throw new Error('这个作品集暂时无法打开，请重新连接后重试。');
     state.view = 'collections'; state.scope = {type:'collection', key:id, title:collection.title};
-    state.search = ''; state.layout = 'grid'; clearSelection();
+    state.search = ''; state.layout = 'grid'; state.sort='collection'; clearSelection();
     if (shouldRender) render();
   }
   const dateText = (value, options = {}) => {
@@ -193,7 +194,8 @@
       });
     }
     const dateValue = photo => photo.taken_at || '';
-    photos.sort((a,b) => state.sort === 'date-asc' ? dateValue(a).localeCompare(dateValue(b)) : state.sort === 'import-desc' ? (b.imported_at || '').localeCompare(a.imported_at || '') : state.sort === 'name' ? (a.title || a.filename).localeCompare(b.title || b.filename, 'zh-CN') : dateValue(b).localeCompare(dateValue(a)));
+    if(state.sort==='collection'&&currentCollection()) {const positions=new Map(currentCollection().photo_ids.map((id,index)=>[id,index]));photos.sort((a,b)=>positions.get(a.id)-positions.get(b.id));}
+    else photos.sort((a,b) => state.sort === 'date-asc' ? dateValue(a).localeCompare(dateValue(b)) : state.sort === 'import-desc' ? (b.imported_at || '').localeCompare(a.imported_at || '') : state.sort === 'name' ? (a.title || a.filename).localeCompare(b.title || b.filename, 'zh-CN') : dateValue(b).localeCompare(dateValue(a)));
     return photos;
   }
   function brandMark() {
@@ -213,6 +215,7 @@
   function render() {
     const collection = currentCollection();
     const collectionList = state.view === 'collections' && !state.scope;
+    if(!collection&&state.sort==='collection')state.sort='date-desc';
     const placesPage = state.view === 'places' && !state.scope;
     const colorsPage = state.view === 'colors' && !state.scope;
     const photoView = !collectionList && (state.scope || ['photos','timeline','favorites'].includes(state.view));
@@ -227,8 +230,8 @@
     const scopeIcon = collection ? 'folder' : state.scope?.type==='color' ? 'palette' : ['place','country'].includes(state.scope?.type) ? 'pin' : 'book';
     const backText = collection ? '返回作品集' : state.scope?.type==='color' ? '返回色彩足迹' : ['place','country'].includes(state.scope?.type) ? '返回拍摄地点' : '返回旅行手记';
     const stats = state.scope ? `<button class="inline-link" data-action="clear-scope">${icon('left')} ${backText}</button>${collection ? `<div class="collection-detail-header"><div class="collection-cover-small">${collection.cover_url ? `<img src="${esc(collection.cover_url)}" alt="作品集封面">` : `<div class="collection-placeholder">${icon('folder')}</div>`}</div><div><div class="collection-meta"><span>${icon('photo')} ${collection.photo_ids.length} 张照片</span>${collection.place ? `<span>${icon('pin')} ${esc(collection.place)}</span>` : ''}</div></div></div>` : `<div class="filter-chip">${icon(scopeIcon)}<span>${esc(state.scope.title)}</span><button data-action="clear-scope" aria-label="${backText}">${icon('close')}</button></div>`}` : `<div class="stats-row"><div class="stat"><span class="stat-value">${state.collections.length}</span><span class="stat-label">份作品集</span></div><div class="stat"><span class="stat-value">${state.photos.length}</span><span class="stat-label">张摄影作品</span></div><div class="stat"><span class="stat-value">${new Set(state.photos.map(photoCity).filter(Boolean)).size}</span><span class="stat-label">个拍摄地点</span></div></div>`;
-    const layoutTabs = photoView ? `<div class="view-tabs" aria-label="照片布局"><button class="view-tab ${!isTimeline ? 'active' : ''}" data-action="layout-grid">${icon('grid')} 照片画廊</button><button class="view-tab ${isTimeline ? 'active' : ''}" data-action="layout-timeline">${icon('clock')} 时间线</button><button class="view-tab ${state.selectionMode ? 'active' : ''}" data-action="toggle-selection">${icon('check')} ${state.selectionMode ? '退出批量管理' : '批量管理'}</button></div>` : collectionList ? '' : `<span class="section-label">${state.view === 'places' ? '以足迹，串起回忆' : '一段旅程，一页故事'}</span>`;
-    const sortOptions = collectionList ? [['date-desc','最近更新'],['date-asc','创建时间 · 由早及晚'],['name','作品集名称']] : [['date-desc','拍摄时间 · 由近及远'],['date-asc','拍摄时间 · 由远及近'],['import-desc','最近导入'],['name','作品名称']];
+    const layoutTabs = photoView ? `<div class="view-tabs" aria-label="照片布局"><button class="view-tab ${!isTimeline ? 'active' : ''}" data-action="layout-grid">${icon('grid')} 照片画廊</button><button class="view-tab ${isTimeline ? 'active' : ''}" data-action="layout-timeline">${icon('clock')} 时间线</button><button class="view-tab ${state.selectionMode ? 'active' : ''}" data-action="toggle-selection">${icon('check')} ${state.selectionMode ? '退出批量管理' : '批量管理'}</button>${collection&&collection.photo_ids.length>1 ? `<button class="view-tab" data-action="order-open" data-id="${esc(collection.id)}">${icon('edit')} 编排照片</button>` : ''}</div>` : collectionList ? '' : `<span class="section-label">${state.view === 'places' ? '以足迹，串起回忆' : '一段旅程，一页故事'}</span>`;
+    const sortOptions = collectionList ? [['date-desc','最近更新'],['date-asc','创建时间 · 由早及晚'],['name','作品集名称']] : [...(collection ? [['collection','作品集编排']] : []),['date-desc','拍摄时间 · 由近及远'],['date-asc','拍摄时间 · 由远及近'],['import-desc','最近导入'],['name','作品名称']];
     app.innerHTML = `<div class="app-shell ${collectionList ? 'collection-home' : ''}"><aside class="sidebar"><a class="brand brand-icon-only" href="#" data-action="home" aria-label="相册首页" title="相册首页"><span class="brand-mark">${brandMark()}</span></a><nav class="nav-list" aria-label="相册导航">${navs.map(([key, svg, label])=>`<button class="nav-item ${state.view === key ? 'active' : ''}" data-action="nav" data-view="${key}" ${state.view === key ? 'aria-current="page"' : ''}>${icon(svg)}<span>${label}</span>${['collections','photos','favorites'].includes(key) ? `<span class="nav-count">${key === 'collections' ? state.collections.length : key === 'photos' ? state.photos.length : state.photos.filter(photo=>photo.favorite).length}</span>` : ''}</button>`).join('')}</nav><div class="sidebar-bottom"><button class="inline-link" data-action="about">使用说明 ${icon('right')}</button></div></aside><main class="main-area"><header class="topbar"><div class="breadcrumb">我的相册 <span>/</span> ${collection ? '<button class="inline-link" data-action="collections-home">作品集</button> <span>/</span> ' : ''}<strong>${esc(state.scope?.title || activeNav[2])}</strong></div><div class="topbar-right">${window.ShiguangMusic?.renderButton() || ''}${window.ShiguangFullscreen?.renderButton() || ''}<button class="icon-button settings-button" data-action="settings-open" aria-label="设置" title="设置">${icon('settings')}</button><button class="icon-button about-button" data-action="about" aria-label="使用说明">${icon('info')}</button><button class="button secondary" data-action="create-collection">${icon('folder')} 创建作品集</button><button class="button primary" data-action="import">${icon('plus')} 导入照片</button></div></header><div class="page-content">${collectionList ? renderCollectionIntro() : renderPageHeading(heading,description,headingActions)}${collectionList || placesPage || colorsPage ? '' : stats}${state.scope?.type === 'journal' ? renderJournalNote() : ''}${placesPage || colorsPage ? '' : renderToolbar(layoutTabs,collectionList,isTimeline,sortOptions)}<div id="collection" aria-live="polite">${renderCollection()}</div></div></main></div><div class="global-drop-overlay" id="global-drop"><div class="global-drop-content">${icon('upload')}<h2>把沿途的风景，放进来。</h2><p>可一次拖入多张照片，松开鼠标开始整理</p></div></div>`;
   }
   function renderCollectionList() {
@@ -315,6 +318,7 @@
     }
     if (state.modal?.type==='settings') window.ShiguangSettings?.onClose();
     if (state.modal?.type==='video-export') window.ShiguangVideoExport?.onClose();
+    if (state.modal?.type==='collection-order') window.ShiguangCollectionOrder?.onClose();
     state.modal = null;
     state.lightboxId = null;
     app.inert = false;
@@ -384,6 +388,7 @@
     const type = state.modal.type;
     if (type === 'settings' && window.ShiguangSettings) {modalRoot.innerHTML=window.ShiguangSettings.renderModal(state.modal);return;}
     if (type === 'video-export' && window.ShiguangVideoExport) {modalRoot.innerHTML=window.ShiguangVideoExport.renderModal(state.modal);return;}
+    if (type === 'collection-order' && window.ShiguangCollectionOrder) {modalRoot.innerHTML=window.ShiguangCollectionOrder.renderModal(state.modal);return;}
     if (type === 'atlas-edit' && window.ShiguangAtlas) {modalRoot.innerHTML=window.ShiguangAtlas.renderModal(state.modal);return;}
     if (type === 'lightbox') { renderLightbox(); return; }
     if (type === 'photo-export') { renderPhotoExport(); return; }
@@ -651,6 +656,7 @@
   }
   async function action(name, target) {
     const id = target.dataset.id;
+    if (name.startsWith('order-') && window.ShiguangCollectionOrder) {await window.ShiguangCollectionOrder.handleAction(name,target);return;}
     if (name.startsWith('color-') && window.ShiguangColors) {await window.ShiguangColors.handleClick(target);return;}
     if (name.startsWith('settings-') && window.ShiguangSettings) {await window.ShiguangSettings.handleAction(name,target);return;}
     if (name.startsWith('video-') && window.ShiguangVideoExport) {await window.ShiguangVideoExport.handleAction(name,target);return;}
@@ -718,6 +724,7 @@
     else if (name === 'close-modal' || name === 'backdrop-close') closeModal();
     else if (name === 'layout-grid' || name === 'layout-timeline') {
       if (state.view === 'timeline' && name === 'layout-grid') state.view='photos';
+      if(name==='layout-grid'&&currentCollection()&&state.layout==='timeline')state.sort='collection';
       state.layout=name === 'layout-grid' ? 'grid' : 'timeline'; render();
     } else if (name === 'clear-search') {state.search=''; render();}
     else if (name === 'open-photo' || name === 'back-photo') openPhoto(id);

@@ -371,7 +371,8 @@ class AlbumStore:
                 CREATE TABLE IF NOT EXISTS collection_photos (
                     collection_id TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
                     photo_id TEXT NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
-                    added_at TEXT NOT NULL, PRIMARY KEY(collection_id, photo_id)
+                    added_at TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY(collection_id, photo_id)
                 );
                 CREATE INDEX IF NOT EXISTS collection_photos_by_photo ON collection_photos(photo_id);
                 CREATE TABLE IF NOT EXISTS collection_routes (
@@ -403,6 +404,19 @@ class AlbumStore:
             for name in ("country", "city"):
                 if name not in columns:
                     db.execute(f"ALTER TABLE photos ADD COLUMN {name} TEXT NOT NULL DEFAULT ''")
+            member_columns = {row["name"] for row in db.execute("PRAGMA table_info(collection_photos)")}
+            if "position" not in member_columns:
+                if not db.in_transaction:
+                    db.execute("BEGIN")
+                db.execute("ALTER TABLE collection_photos ADD COLUMN position INTEGER NOT NULL DEFAULT 0")
+                # Keep the previous gallery's newest-first presentation when an
+                # existing album gains its first explicit portfolio order.
+                members = db.execute("SELECT cp.collection_id,cp.photo_id FROM collection_photos cp JOIN photos p ON p.id=cp.photo_id ORDER BY cp.collection_id,p.taken_at DESC,p.imported_at DESC,p.id").fetchall()
+                positions = {}
+                for member in members:
+                    position = positions.get(member["collection_id"], 0)
+                    db.execute("UPDATE collection_photos SET position=? WHERE collection_id=? AND photo_id=?", (position, member["collection_id"], member["photo_id"]))
+                    positions[member["collection_id"]] = position + 1
         self.recover_deletions()
 
     @contextmanager
@@ -738,7 +752,7 @@ class AlbumStore:
 
     def collection(self, db, collection_id: str) -> dict:
         result = dict(self.require_collection(db, collection_id))
-        rows = db.execute("SELECT cp.photo_id FROM collection_photos cp JOIN photos p ON p.id = cp.photo_id WHERE cp.collection_id = ? ORDER BY cp.added_at, cp.rowid", (collection_id,)).fetchall()
+        rows = db.execute("SELECT cp.photo_id FROM collection_photos cp JOIN photos p ON p.id = cp.photo_id WHERE cp.collection_id = ? ORDER BY cp.position, cp.added_at, cp.rowid", (collection_id,)).fetchall()
         result["photo_ids"] = [row["photo_id"] for row in rows]
         result["photo_count"] = len(rows)
         cover_id = result["cover_photo_id"] if result["cover_photo_id"] in result["photo_ids"] else next(iter(result["photo_ids"]), None)
@@ -936,11 +950,32 @@ class AlbumStore:
     def attach_collection_photos(db, collection_id: str, photo_ids: list[str]) -> int:
         count = 0
         timestamp = now()
+        last = db.execute("SELECT MAX(position) FROM collection_photos WHERE collection_id=?", (collection_id,)).fetchone()[0]
+        position = (last if last is not None else -1) + 1
         for photo_id in photo_ids:
-            count += db.execute("INSERT OR IGNORE INTO collection_photos(collection_id,photo_id,added_at) VALUES(?,?,?)", (collection_id, photo_id, timestamp)).rowcount
+            added = db.execute("INSERT OR IGNORE INTO collection_photos(collection_id,photo_id,added_at,position) VALUES(?,?,?,?)", (collection_id, photo_id, timestamp, position)).rowcount
+            count += added
+            position += added
         if count:
             db.execute("UPDATE collections SET updated_at = ? WHERE id = ?", (timestamp, collection_id))
         return count
+
+    def reorder_collection_photos(self, collection_id: str, changes: dict) -> dict:
+        if not isinstance(changes, dict) or "photo_ids" not in changes or set(changes) - {"photo_ids", "expected_photo_ids"}:
+            raise ApiError(400, "请提交作品集的完整照片顺序。")
+        for key in changes:
+            ids = changes[key]
+            if not isinstance(ids, list) or len(ids) > 5000 or any(not isinstance(value, str) or not re.fullmatch(r"[a-f0-9]{32}", value) for value in ids) or len(set(ids)) != len(ids):
+                raise ApiError(400, "照片顺序需要包含互不重复的有效照片，每次最多编排 5000 张。")
+        with self.lock, self.connect() as db:
+            current = self.collection(db, collection_id)
+            ids = changes["photo_ids"]
+            if set(ids) != set(current["photo_ids"]) or ("expected_photo_ids" in changes and changes["expected_photo_ids"] != current["photo_ids"]):
+                raise ApiError(409, "作品集照片或顺序已有变化，请重新打开编排窗口后重试。")
+            if ids != current["photo_ids"]:
+                db.executemany("UPDATE collection_photos SET position=? WHERE collection_id=? AND photo_id=?", [(position, collection_id, photo_id) for position, photo_id in enumerate(ids)])
+                db.execute("UPDATE collections SET updated_at=? WHERE id=?", (now(), collection_id))
+            return {"collection": self.collection(db, collection_id)}
 
     def add_collection_photos(self, collection_id: str, changes: dict) -> dict:
         ids = self.requested_photo_ids(changes)
@@ -1206,9 +1241,9 @@ class AlbumHandler(BaseHTTPRequestHandler):
                 elif path == "/api/music":
                     self.send_json(200, store.music())
                 elif video_preview:
-                    if set(query) - {"order"} or ("order" in query and query["order"] not in (["oldest"], ["newest"])):
+                    if set(query) - {"order"} or ("order" in query and query["order"] not in (["collection"], ["oldest"], ["newest"])):
                         raise ApiError(400, "请选择有效的视频照片顺序。")
-                    data = self.server.video_jobs.preview(video_preview.group(1), query.get("order", ["oldest"])[0])
+                    data = self.server.video_jobs.preview(video_preview.group(1), query.get("order", ["collection"])[0])
                     self.send_response(200)
                     self.send_header("Content-Type", "image/jpeg")
                     self.send_header("Cache-Control", "no-store")
@@ -1266,6 +1301,8 @@ class AlbumHandler(BaseHTTPRequestHandler):
                     self.send_json(200, store.update_route(path.split("/")[3], self.read_json()))
                 elif re.fullmatch(r"/api/collections/[a-f0-9]{32}/photos", path):
                     self.send_json(200, store.add_collection_photos(path.split("/")[3], self.read_json()))
+                elif re.fullmatch(r"/api/collections/[a-f0-9]{32}/order", path):
+                    self.send_json(200, store.reorder_collection_photos(path.split("/")[3], self.read_json(512 * 1024)))
                 elif re.fullmatch(r"/api/collections/[a-f0-9]{32}", path):
                     self.send_json(200, store.update_collection(path.rsplit("/", 1)[1], self.read_json()))
                 elif re.fullmatch(r"/api/photos/[a-f0-9]{32}", path):
