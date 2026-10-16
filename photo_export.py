@@ -13,6 +13,11 @@ INK = (28, 29, 31)
 SECONDARY = (107, 109, 113)
 
 
+def framed_border_height(width: int) -> int:
+    """Keep still exports and slideshow background extraction in agreement."""
+    return max(1, round(width * .09))
+
+
 def _clean(value) -> str:
     # EXIF may contain newlines, null padding, or very long arbitrary strings.
     return " ".join(re.sub(r"[\x00-\x1f\x7f]", " ", str(value or "")).split())[:500]
@@ -117,7 +122,7 @@ def _to_srgb(image: Image.Image, profile: bytes | None) -> Image.Image:
 def _draw_border(canvas: Image.Image, photo: dict, assets_dir: Path, image_height: int):
     width = canvas.width
     bar_height = canvas.height - image_height
-    pad = max(1, round(width * .043))
+    pad = max(1, round(width * .036))
     draw = ImageDraw.Draw(canvas)
     brand, model, asset = camera_identity(photo.get("camera", ""))
     parameters = "   ".join(value for value in (
@@ -126,7 +131,7 @@ def _draw_border(canvas: Image.Image, photo: dict, assets_dir: Path, image_heigh
     ) if value)
     lens = _clean(photo.get("lens"))
     center_y = image_height + bar_height / 2
-    gap = max(1, round(width * .012))
+    gap = max(1, round(width * .008))
     left_width = max(1, round(width * .29))
     right_width = max(1, width - pad * 2 - left_width - round(width * .045))
 
@@ -180,7 +185,7 @@ def render_framed_photo(original_path: Path, photo_dict: dict, assets_dir: Path,
             upright = upright.resize((PREVIEW_WIDTH, max(1, round(upright.height * PREVIEW_WIDTH / upright.width))), Image.Resampling.LANCZOS)
         photo = _to_srgb(upright, profile)
     width, height = photo.size
-    border_height = max(1, round(width * .122))
+    border_height = framed_border_height(width)
     canvas = Image.new("RGB", (width, height + border_height), "white")
     canvas.paste(photo, (0, 0))
     photo.close()

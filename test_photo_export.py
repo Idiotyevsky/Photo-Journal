@@ -26,21 +26,21 @@ class PhotoExportTests(unittest.TestCase):
         result = render_framed_photo(self.path, self.metadata, self.assets)
         with Image.open(BytesIO(result)) as image:
             self.assertEqual(image.format, "JPEG")
-            self.assertEqual(image.size, (2400, 1893))
+            self.assertEqual(image.size, (2400, 1816))
             self.assertEqual(image.mode, "RGB")
             self.assertTrue(all(abs(a-b)<3 for a,b in zip(image.getpixel((1200, 800)), (32, 66, 119))))
-            self.assertEqual(image.getpixel((10, 1880)), (255, 255, 255))
+            self.assertEqual(image.getpixel((10, 1805)), (255, 255, 255))
             # The border is populated in both independent columns.
-            self.assertLess(min(image.crop((80, 1640, 820, 1850)).getextrema()[0]), 80)
-            self.assertLess(min(image.crop((900, 1640, 2310, 1850)).getextrema()[0]), 80)
+            self.assertLess(min(image.crop((80, 1610, 820, 1806)).getextrema()[0]), 80)
+            self.assertLess(min(image.crop((900, 1610, 2310, 1806)).getextrema()[0]), 80)
         self.assertEqual(self.path.read_bytes(), original)
 
     def test_preview_is_smaller_without_changing_geometry(self):
         Image.new("RGB", (3000, 2000), "navy").save(self.path)
         with Image.open(BytesIO(render_framed_photo(self.path, self.metadata, self.assets, preview=True))) as image:
-            self.assertEqual(image.size, (1600, 1262))
+            self.assertEqual(image.size, (1600, 1211))
         with Image.open(BytesIO(render_framed_photo(self.path, self.metadata, self.assets))) as image:
-            self.assertEqual(image.size, (3000, 2366))
+            self.assertEqual(image.size, (3000, 2270))
 
     def test_orientation_is_applied_once_and_old_exif_is_not_copied(self):
         source = Image.new("RGB", (600, 400), "red")
@@ -48,7 +48,7 @@ class PhotoExportTests(unittest.TestCase):
         exif = Image.Exif(); exif[274] = 6; exif[270] = "private/source/path"
         source.save(self.path, exif=exif)
         with Image.open(BytesIO(render_framed_photo(self.path, self.metadata, self.assets))) as image:
-            self.assertEqual(image.size, (400, 649))
+            self.assertEqual(image.size, (400, 636))
             self.assertLess(image.getpixel((200, 100))[0], 5)
             self.assertGreater(image.getpixel((200, 500))[0], 240)
             self.assertFalse(image.getexif())
@@ -59,9 +59,9 @@ class PhotoExportTests(unittest.TestCase):
         source.paste((20, 40, 90, 255), (100, 100, 200, 200))
         source.save(path)
         with Image.open(BytesIO(render_framed_photo(path, {}, self.assets))) as image:
-            self.assertEqual(image.size, (500, 761))
+            self.assertEqual(image.size, (500, 745))
             self.assertEqual(image.getpixel((20, 20)), (255, 255, 255))
-            self.assertEqual(image.crop((0, 710, 500, 760)).getextrema(), ((255, 255),)*3)
+            self.assertEqual(image.crop((0, 710, 500, 744)).getextrema(), ((255, 255),)*3)
             self.assertLess(image.getpixel((150, 150))[2], 100)
 
     def test_multiple_frames_use_first_and_invalid_profile_is_safe(self):
@@ -70,7 +70,7 @@ class PhotoExportTests(unittest.TestCase):
         original = path.read_bytes()
         with Image.open(BytesIO(render_framed_photo(path, self.metadata, self.assets))) as image:
             self.assertGreater(image.getpixel((250, 150))[0], 240)
-            self.assertEqual(image.size, (500, 361))
+            self.assertEqual(image.size, (500, 345))
             self.assertEqual(ImageCms.ImageCmsProfile(BytesIO(image.info["icc_profile"])).profile.xcolor_space.strip(), "RGB")
         self.assertEqual(path.read_bytes(), original)
 
@@ -94,10 +94,10 @@ class PhotoExportTests(unittest.TestCase):
         Image.new("RGB", (800, 1200), "gray").save(self.path)
         metadata = {**self.metadata, "camera": "未知相机" * 100, "lens": "Lens with very long serial details " * 100}
         with Image.open(BytesIO(render_framed_photo(self.path, metadata, self.assets))) as image:
-            self.assertEqual(image.size, (800, 1298))
+            self.assertEqual(image.size, (800, 1272))
             # Even extreme metadata leaves the outer margins white.
-            self.assertEqual(image.crop((0, 1201, 10, 1297)).getextrema(), ((255, 255),)*3)
-            self.assertEqual(image.crop((790, 1201, 800, 1297)).getextrema(), ((255, 255),)*3)
+            self.assertEqual(image.crop((0, 1201, 10, 1271)).getextrema(), ((255, 255),)*3)
+            self.assertEqual(image.crop((790, 1201, 800, 1271)).getextrema(), ((255, 255),)*3)
 
 
 if __name__ == "__main__":

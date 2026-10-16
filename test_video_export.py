@@ -9,9 +9,10 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest.mock import patch
 import wave
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 from video_export import VideoExportError, compose_video_slide, encode_slideshow, find_ffmpeg, render_video_preview
 
@@ -60,6 +61,31 @@ class VideoExportTests(unittest.TestCase):
         with compose_video_slide(self.second,self.meta,self.assets,(1280,720)) as portrait:
             self.assertTrue(all(c>245 for c in portrait.getpixel((640,625))))
             self.assertLess(portrait.getpixel((70,360))[2],portrait.getpixel((640,360))[2])
+
+    def test_background_uses_whole_original_without_white_strip_or_extra_crop(self):
+        large_landscape = self.root / 'large-landscape.jpg'
+        large_portrait = self.root / 'large-portrait.jpg'
+        Image.new('RGB', (3000, 2000), (91, 135, 172)).save(large_landscape)
+        Image.new('RGB', (2000, 3000), (121, 145, 87)).save(large_portrait)
+        original_fit = ImageOps.fit
+        # Fixed expected dimensions catch an obsolete white-bar ratio in the
+        # video crop, including after the print renderer reduces preview width.
+        for source, expected in ((self.first, (1200, 800)),
+                                 (self.second, (800, 1200)),
+                                 (large_landscape, (1600, 1067)),
+                                 (large_portrait, (1600, 2400))):
+            with self.subTest(photo=source.name):
+                background_sources = []
+
+                def capture_fit(image, size, *args, **kwargs):
+                    background_sources.append(image.size)
+                    return original_fit(image, size, *args, **kwargs)
+
+                with patch('video_export.ImageOps.fit', side_effect=capture_fit):
+                    with compose_video_slide(source, self.meta, self.assets, (960, 540)) as frame:
+                        self.assertEqual(frame.size, (960, 540))
+                self.assertEqual(background_sources, [expected],
+                                 'soft surround must receive the entire photograph, with only its added white strip removed')
 
     def test_mp4_contains_real_dissolve_and_looped_audio_to_exact_duration(self):
         audio=self.root/'short.wav'

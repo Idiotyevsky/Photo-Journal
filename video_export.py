@@ -11,7 +11,7 @@ import time
 
 from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageOps
 
-from photo_export import render_framed_photo
+from photo_export import framed_border_height, render_framed_photo
 
 
 FPS = 30
@@ -95,7 +95,7 @@ def compose_video_slide(original_path: Path, photo_dict: dict, assets_dir: Path,
     with Image.open(BytesIO(render_framed_photo(original_path, photo_dict, assets_dir, preview=True))) as source:
         framed = source.convert("RGB")
     # The background uses the photograph alone, without smearing its white bar.
-    photograph = framed.crop((0, 0, framed.width, framed.height - max(1, round(framed.width * .122))))
+    photograph = framed.crop((0, 0, framed.width, framed.height - framed_border_height(framed.width)))
     small = ImageOps.fit(photograph, (max(1, width // 4), max(1, height // 4)), Image.Resampling.LANCZOS)
     photograph.close()
     soft = small.filter(ImageFilter.GaussianBlur(13 * scale))
