@@ -19,7 +19,7 @@ import server
 from PIL import Image
 from desktop import DesktopBridge
 from desktop_files import reveal_in_explorer
-from desktop_downloads import VideoDownloadDialog, install_video_downloads
+from desktop_downloads import AlbumDownloadDialog, install_downloads
 from desktop_navigation import ExternalLinks, install_external_links
 from server import AlbumStore
 
@@ -230,12 +230,12 @@ class DesktopTests(unittest.TestCase):
         window = FakeWindow()
         controller = desktop.DesktopController(window, Path("unused"), "http://127.0.0.1:9999")
         controller.loaded.set()
-        with patch.object(desktop, "install_video_downloads", return_value=object()) as install, \
+        with patch.object(desktop, "install_downloads", return_value=object()) as install, \
                 patch.object(desktop, "install_external_links", return_value=object()) as links:
             controller.after_start()
             if os.name == "nt":
                 install.assert_called_once_with(window, controller.origin)
-                self.assertIsNotNone(controller.video_downloads)
+                self.assertIsNotNone(controller.downloads)
                 links.assert_called_once_with(window, controller.origin)
                 self.assertIsNotNone(controller.external_links)
         controller.run_smoke_test()
@@ -308,7 +308,7 @@ class DesktopTests(unittest.TestCase):
             self.assertIs(kwargs["js_api"]._store, service.store)
 
 
-class VideoDownloadDialogTests(unittest.TestCase):
+class AlbumDownloadDialogTests(unittest.TestCase):
     origin = "http://127.0.0.1:54321"
     url = origin + "/api/video-jobs/" + "a" * 32 + "/file?download=1"
 
@@ -323,7 +323,7 @@ class VideoDownloadDialogTests(unittest.TestCase):
         dialog.ShowDialog = Mock(side_effect=show)
         forms = SimpleNamespace(SaveFileDialog=Mock(return_value=dialog), DialogResult=SimpleNamespace(OK="ok"))
         browser = SimpleNamespace(form=object(), on_download_starting=Mock())
-        handler = VideoDownloadDialog(browser, self.origin, forms, {"ALLOW_DOWNLOADS": True})
+        handler = AlbumDownloadDialog(browser, self.origin, forms, {"ALLOW_DOWNLOADS": True})
         args = SimpleNamespace(DownloadOperation=SimpleNamespace(Uri=self.url), ResultFilePath=suggestion, Cancel=False)
         return handler, args, dialog, forms, browser
 
@@ -355,7 +355,7 @@ class VideoDownloadDialogTests(unittest.TestCase):
                                      ("旅行.MP4", "旅行.MP4"), ("file", "作品集-幻灯片.mp4"),
                                      ("", "作品集-幻灯片.mp4")]:
             with self.subTest(suggestion=suggestion):
-                self.assertEqual(VideoDownloadDialog.filename(suggestion), expected)
+                self.assertEqual(AlbumDownloadDialog.filename(suggestion), expected)
         handler, args, dialog, forms, browser = self.setup_dialog(suggestion=str(self.destination / "旅行.mp4"))
         handler.on_download_starting(object(), args)
         self.assertEqual(dialog.InitialDirectory, str(self.destination))
@@ -368,9 +368,84 @@ class VideoDownloadDialogTests(unittest.TestCase):
         self.assertEqual(args.ResultFilePath, before)
         dialog.Dispose.assert_called_once()
 
+    def test_original_image_filters_match_encoded_format_even_if_source_suffix_is_wrong(self):
+        store = AlbumStore(self.destination / 'album')
+        for format_name, extension in (('JPEG','jpg'),('PNG','png'),('WEBP','webp'),('GIF','gif'),('BMP','bmp'),('TIFF','tif')):
+            with self.subTest(format=format_name):
+                output=BytesIO();Image.new('RGB',(32,24),'navy').save(output,format_name)
+                photo=store.import_photo(output.getvalue(),'P1000364.JPG',None)['photo']
+                handler,args,dialog,_forms,browser=self.setup_dialog(suggestion=r'C:\Downloads\P1000364.JPG')
+                args.DownloadOperation.Uri=self.origin+photo['url']
+                suggested=[]
+                def show(_owner):
+                    suggested.append(dialog.FileName)
+                    dialog.FileName=str(self.destination/('旅行照片.'+dialog.DefaultExt))
+                    return 'ok'
+                dialog.ShowDialog.side_effect=show
+                handler.on_download_starting(None,args)
+                self.assertEqual(dialog.Title,'保存原图')
+                self.assertEqual(dialog.DefaultExt,extension)
+                self.assertEqual(dialog.Filter,handler.IMAGE_TYPES[extension][0])
+                self.assertEqual(suggested,['P1000364.JPG' if extension=='jpg' else 'P1000364.'+extension])
+                self.assertEqual(args.ResultFilePath,str(self.destination/('旅行照片.'+extension)))
+                self.assertFalse(args.Cancel);browser.on_download_starting.assert_not_called()
+                self.assertEqual((store.originals/(photo['id']+'.'+extension)).read_bytes(),output.getvalue())
+
+    def test_framed_export_defaults_to_jpeg_and_corrects_mistyped_suffix(self):
+        for query in ('','?preview=0'):
+            handler,args,dialog,_forms,browser=self.setup_dialog(suggestion=r'C:\Downloads\扬州-白边.png')
+            args.DownloadOperation.Uri=self.origin+'/api/photos/'+'b'*32+'/framed'+query
+            suggested=[]
+            def show(_owner):
+                suggested.append(dialog.FileName)
+                if len(suggested)==1:
+                    dialog.FileName=str(self.destination/'新的作品.png')
+                return 'ok'
+            dialog.ShowDialog.side_effect=show
+            handler.on_download_starting(None,args)
+            self.assertEqual(dialog.Title,'保存白边作品')
+            self.assertEqual(dialog.DefaultExt,'jpg')
+            self.assertEqual(dialog.Filter,'JPEG 图片 (*.jpg;*.jpeg)|*.jpg;*.jpeg')
+            self.assertEqual(suggested,['扬州-白边.jpg',str(self.destination/'新的作品.jpg')])
+            self.assertEqual(args.ResultFilePath,str(self.destination/'新的作品.jpg'))
+            self.assertFalse(args.Cancel);browser.on_download_starting.assert_not_called()
+        for name,extension,aliases,expected in [('海边.JPEG','jpg',('.jpg','.jpeg'),'海边.JPEG'),('镜头.TIFF','tif',('.tif','.tiff'),'镜头.TIFF'),('file','jpg',('.jpg','.jpeg'),'照片.jpg'),('相片','png',('.png',),'相片.png')]:
+            self.assertEqual(AlbumDownloadDialog.filename(name,extension,aliases,'照片'),expected)
+
+    def test_corrected_suffix_is_confirmed_again_before_overwriting_an_existing_file(self):
+        handler,args,dialog,_forms,_browser=self.setup_dialog()
+        args.DownloadOperation.Uri=self.origin+'/api/photos/'+'b'*32+'/framed'
+        destination=self.destination/'已有作品.jpg';destination.write_bytes(b'keep existing picture')
+        before=args.ResultFilePath;choices=[]
+        def show(_owner):
+            choices.append(dialog.FileName)
+            if len(choices)==1:
+                dialog.FileName=str(self.destination/'已有作品.png')
+                return 'ok'
+            self.assertEqual(dialog.FileName,str(destination))
+            self.assertTrue(dialog.OverwritePrompt)
+            return 'cancel'
+        dialog.ShowDialog.side_effect=show
+        handler.on_download_starting(None,args)
+        self.assertTrue(args.Cancel);self.assertEqual(args.ResultFilePath,before)
+        self.assertEqual(len(choices),2)
+        self.assertEqual(destination.read_bytes(),b'keep existing picture')
+
+    def test_cancel_and_disabled_image_downloads_keep_destination_unchanged(self):
+        handler,args,dialog,forms,_browser=self.setup_dialog(accepted=False)
+        args.DownloadOperation.Uri=self.origin+'/media/originals/'+'b'*32+'.png'
+        before=args.ResultFilePath;handler.on_download_starting(None,args)
+        self.assertTrue(args.Cancel);self.assertEqual(args.ResultFilePath,before)
+        dialog.Dispose.assert_called_once()
+        handler.settings['ALLOW_DOWNLOADS']=False;args.Cancel=False;forms.SaveFileDialog.reset_mock()
+        handler.on_download_starting(None,args)
+        self.assertTrue(args.Cancel);forms.SaveFileDialog.assert_not_called()
+
     def test_other_exports_and_other_origins_keep_the_existing_handler(self):
         handler, args, dialog, forms, browser = self.setup_dialog()
-        for uri in (self.origin + "/api/backup", self.origin + "/api/export", self.origin + "/api/photos/" + "b" * 32 + "/framed",
+        for uri in (self.origin + "/api/backup", self.origin + "/api/export", self.origin + "/api/photos/" + "b" * 32 + "/framed?preview=1",
+                    self.origin+'/media/previews/'+'b'*32+'.jpg', self.origin+'/media/originals/'+'b'*32+'.jpg?path=other',
+                    'https://outside.example/media/originals/'+'b'*32+'.png', self.origin+'/api/photos/'+'b'*32+'/framed?unknown=1',
                     "https://outside.example/api/video-jobs/" + "a" * 32 + "/file?download=1",
                     self.url.replace(":54321", ":54322"), self.url + "&path=C:/private", self.url + "#fragment",
                     self.url.replace("a" * 32, "../private")):
@@ -408,7 +483,7 @@ class VideoDownloadDialogTests(unittest.TestCase):
         with patch.dict(sys.modules, {"System": SimpleNamespace(Action=lambda function: function),
                                      "webview": SimpleNamespace(settings={"ALLOW_DOWNLOADS": True}),
                                      "webview.platforms.edgechromium": SimpleNamespace(WinForms=fake_forms)}):
-            handler = install_video_downloads(window, self.origin)
+            handler = install_downloads(window, self.origin)
         window.native.Invoke.assert_called_once()
         self.assertEqual(core.DownloadStarting.callbacks, [handler.on_download_starting])
         self.assertIs(handler.fallback, fallback)

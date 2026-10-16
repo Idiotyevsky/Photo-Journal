@@ -17,7 +17,7 @@ import threading
 import time
 from typing import Any
 
-from desktop_downloads import install_video_downloads
+from desktop_downloads import install_downloads
 from desktop_navigation import install_external_links
 
 
@@ -347,7 +347,7 @@ class DesktopController:
         self.allow_close = threading.Event()
         self.close_check = threading.Event()
         self.smoke_result: dict | None = None
-        self.video_downloads = None
+        self.downloads = None
         self.external_links = None
         window.events.loaded += self.loaded.set
         window.events.closed += self.closed.set
@@ -411,12 +411,12 @@ class DesktopController:
             except Exception:
                 LOG.exception("Could not configure external link navigation")
             try:
-                self.video_downloads = install_video_downloads(self.window, self.origin)
-                LOG.info("MP4 video save dialog installed")
+                self.downloads = install_downloads(self.window, self.origin)
+                LOG.info("Photo and video save dialogs installed")
             except Exception:
-                LOG.exception("Could not configure the MP4 save dialog")
+                LOG.exception("Could not configure photo and video save dialogs")
                 if self.report:
-                    self.write_report({"ok": False, "error": "视频保存窗口未能完成初始化。"})
+                    self.write_report({"ok": False, "error": "照片与视频保存窗口未能完成初始化。"})
                     self.allow_close.set()
                     self.window.destroy()
                     return
