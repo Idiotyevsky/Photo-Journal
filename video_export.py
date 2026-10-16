@@ -37,7 +37,21 @@ def find_ffmpeg() -> Path:
     raise VideoExportError("视频组件尚未准备好，请重新打开最新版相册。")
 
 
-def _glass_mask(size: tuple[int, int], border: int) -> Image.Image:
+def _rounded_mask(size: tuple[int, int], radius: int) -> Image.Image:
+    """Antialias only the contour, keeping the photograph itself sharp."""
+    width, height = size
+    radius = max(0, min(radius, width // 2, height // 2))
+    if not radius:
+        return Image.new("L", size, 255)
+    factor = 4
+    large = Image.new("L", (width * factor, height * factor))
+    ImageDraw.Draw(large).rounded_rectangle((0, 0, large.width - 1, large.height - 1), radius=radius * factor, fill=255)
+    mask = large.resize(size, Image.Resampling.LANCZOS)
+    large.close()
+    return mask
+
+
+def _glass_mask(size: tuple[int, int], border: int, radius: int = 0) -> Image.Image:
     """A short outward transition; its fully opaque centre is covered by the print."""
     width, height = size
 
@@ -53,10 +67,26 @@ def _glass_mask(size: tuple[int, int], border: int) -> Image.Image:
     vertical = down.resize(size)
     mask = ImageChops.multiply(horizontal, vertical)
     across.close(); down.close(); horizontal.close(); vertical.close()
+    radius = max(0, min(radius, (width - border * 2) // 2, (height - border * 2) // 2))
+    if radius:
+        # The same inner corner continues outward by exactly `border` pixels.
+        # Only the small corner patches need radial distance calculations.
+        outer = radius + border
+        corner = Image.new("L", (outer, outer))
+        corner.putdata([smooth((outer - math.hypot(outer - x, outer - y)) / border)
+                        for y in range(outer) for x in range(outer)])
+        mask.paste(corner, (0, 0))
+        right = corner.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+        bottom = corner.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
+        opposite = corner.transpose(Image.Transpose.ROTATE_180)
+        mask.paste(right, (width - outer, 0))
+        mask.paste(bottom, (0, height - outer))
+        mask.paste(opposite, (width - outer, height - outer))
+        corner.close(); right.close(); bottom.close(); opposite.close()
     return mask
 
 
-def _glass_edge(print_image: Image.Image, border: int) -> tuple[Image.Image, Image.Image]:
+def _glass_edge(print_image: Image.Image, border: int, radius: int = 0) -> tuple[Image.Image, Image.Image]:
     """Continue only the outer edge pixels into a thin frosted-glass collar."""
     width, height = print_image.size
     expanded = Image.new("RGB", (width + border * 2, height + border * 2))
@@ -85,7 +115,7 @@ def _glass_edge(print_image: Image.Image, border: int) -> tuple[Image.Image, Ima
     white = Image.new("RGB", frosted.size, (245, 249, 253))
     glass = Image.blend(frosted, white, .12)
     frosted.close(); white.close()
-    return glass, _glass_mask(glass.size, border)
+    return glass, _glass_mask(glass.size, border, radius)
 
 
 def compose_video_slide(original_path: Path, photo_dict: dict, assets_dir: Path, size=(1920, 1080)) -> Image.Image:
@@ -113,14 +143,16 @@ def compose_video_slide(original_path: Path, photo_dict: dict, assets_dir: Path,
 
     framed.thumbnail((round(width * .78), round(height * .80)), Image.Resampling.LANCZOS)
     x, y = (width - framed.width) // 2, (height - framed.height) // 2
-    # The photograph remains fully opaque right through its original boundary.
-    # Only a narrow collar outside that boundary refracts/softens into the backdrop.
+    radius = min(round(24 * scale), round(min(framed.size) * .055))
+    # The print stays crisp inside its rounded contour. The narrow glass collar
+    # follows that same contour, including the four curved corners.
     border = max(2, round(12 * scale))
-    glass, mask = _glass_edge(framed, border)
+    glass, mask = _glass_edge(framed, border, radius)
     background.paste(glass, (x - border, y - border), mask)
     glass.close(); mask.close()
-    background.paste(framed, (x, y))
-    framed.close()
+    rounded = _rounded_mask(framed.size, radius)
+    background.paste(framed, (x, y), rounded)
+    framed.close(); rounded.close()
     result = background.convert("RGB")
     background.close()
     return result

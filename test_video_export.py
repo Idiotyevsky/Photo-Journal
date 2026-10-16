@@ -12,9 +12,9 @@ import unittest
 from unittest.mock import patch
 import wave
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageChops, ImageOps
 
-from video_export import VideoExportError, compose_video_slide, encode_slideshow, find_ffmpeg, render_video_preview
+from video_export import VideoExportError, _glass_edge, _glass_mask, _rounded_mask, compose_video_slide, encode_slideshow, find_ffmpeg, render_video_preview
 
 
 class VideoExportTests(unittest.TestCase):
@@ -86,6 +86,82 @@ class VideoExportTests(unittest.TestCase):
                         self.assertEqual(frame.size, (960, 540))
                 self.assertEqual(background_sources, [expected],
                                  'soft surround must receive the entire photograph, with only its added white strip removed')
+
+    def test_rounded_contour_is_antialiased_symmetric_and_opaque_inside(self):
+        for size, radius in (((211, 137), 13), ((137, 211), 17)):
+            with self.subTest(size=size):
+                with _rounded_mask(size, radius) as mask:
+                    width, height = size
+                    self.assertEqual(mask.mode, 'L')
+                    self.assertEqual(mask.size, size)
+                    self.assertEqual(mask.getpixel((width // 2, height // 2)), 255)
+                    for point in ((0, 0), (width - 1, 0), (0, height - 1), (width - 1, height - 1)):
+                        self.assertEqual(mask.getpixel(point), 0, 'all four rectangular corners are cut away')
+                    for point in ((width // 2, 0), (0, height // 2), (width - 1, height // 2), (width // 2, height - 1), (radius + 2, radius + 2)):
+                        self.assertEqual(mask.getpixel(point), 255, 'only the curved contour softens, never the print interior or straight edges')
+                    with mask.crop((0, 0, radius + 2, radius + 2)) as corner:
+                        self.assertTrue(any(0 < value < 255 for value in corner.tobytes()), 'curved contour contains genuine antialias alpha values')
+                    for transpose in (Image.Transpose.FLIP_LEFT_RIGHT, Image.Transpose.FLIP_TOP_BOTTOM):
+                        with mask.transpose(transpose) as mirrored, ImageChops.difference(mask, mirrored) as difference:
+                            self.assertIsNone(difference.getbbox(), 'all four antialiased corners have identical geometry')
+        with _rounded_mask((31, 17), 0) as square:
+            self.assertEqual(square.getextrema(), (255, 255), 'zero radius preserves the fully opaque rectangular fallback')
+
+    def test_glass_collar_follows_round_corners_and_keeps_its_short_width(self):
+        size, border, radius = (236, 156), 8, 16
+        with _glass_mask(size, border, radius) as rounded, _glass_mask(size, border) as rectangular:
+            width, height = size
+            self.assertEqual(rounded.getpixel((width // 2, height // 2)), 255)
+            for point in ((0, 0), (width - 1, 0), (0, height - 1), (width - 1, height - 1), (width // 2, 0), (width // 2, height - 1), (0, height // 2), (width - 1, height // 2)):
+                self.assertEqual(rounded.getpixel(point), 0, 'the outermost collar boundary is transparent')
+            for point in ((border, border), (width - border - 1, border), (border, height - border - 1), (width - border - 1, height - border - 1)):
+                self.assertLess(rounded.getpixel(point), 64, 'the discarded print corners cannot leave an opaque square glass patch')
+                self.assertEqual(rectangular.getpixel(point), 255, 'this assertion distinguishes rounded glass from the old rectangular mask')
+            transition = [rounded.getpixel((width // 2, y)) for y in range(border + 1)]
+            self.assertEqual(transition, sorted(transition))
+            self.assertTrue(any(0 < value < 255 for value in transition))
+            self.assertEqual(transition[-1], 255)
+            self.assertEqual(transition, [rectangular.getpixel((width // 2, y)) for y in range(border + 1)], 'round corners do not widen or alter the straight glass transition')
+            for transpose in (Image.Transpose.FLIP_LEFT_RIGHT, Image.Transpose.FLIP_TOP_BOTTOM):
+                with rounded.transpose(transpose) as mirrored, ImageChops.difference(rounded, mirrored) as difference:
+                    self.assertIsNone(difference.getbbox(), 'the glass collar follows all four corners symmetrically')
+        with Image.new('RGB', (220, 140), (80, 120, 150)) as photograph:
+            glass, mask = _glass_edge(photograph, border, radius)
+            try:
+                self.assertEqual(glass.size, size)
+                self.assertEqual(mask.size, size, 'rounded glass keeps exactly the original two-sided collar dimensions')
+                self.assertLess(mask.getpixel((border, border)), 64, 'glass edge actually uses the rounded mask')
+            finally:
+                glass.close(); mask.close()
+
+    def test_composed_round_print_preserves_clear_edges_white_strip_and_rectangular_video(self):
+        for source, size in ((self.first, (960, 540)), (self.second, (960, 540)),
+                             (self.first, (1280, 720)), (self.second, (1920, 1080))):
+            with self.subTest(photo=source.name, resolution=size):
+                captured = {}
+
+                def capture_edge(print_image, border, radius=0):
+                    captured.update(print=print_image.copy(), border=border, radius=radius)
+                    return _glass_edge(print_image, border, radius)
+
+                with patch('video_export._glass_edge', side_effect=capture_edge):
+                    frame = compose_video_slide(source, self.meta, self.assets, size)
+                reference = captured['print']
+                try:
+                    self.assertEqual(frame.size, size, 'only the photo card is rounded; the video canvas stays rectangular')
+                    self.assertEqual(frame.mode, 'RGB')
+                    self.assertGreater(captured['radius'], 0)
+                    self.assertEqual(captured['border'], max(2, round(12 * size[0] / 1920)), 'rounding does not enlarge the glass collar')
+                    width, height = reference.size
+                    x, y = (size[0] - width) // 2, (size[1] - height) // 2
+                    for px, py in ((width // 2, 0), (0, height // 2), (width - 1, height // 2), (width // 2, height - 1), (width // 2, height // 2)):
+                        self.assertEqual(frame.getpixel((x + px, y + py)), reference.getpixel((px, py)), 'print centre and straight edge middles remain exactly sharp and opaque')
+                    self.assertTrue(all(channel > 245 for channel in frame.getpixel((x + width // 2, y + height - 1))), 'the central white information strip remains intact')
+                    for px, py in ((0, 0), (width - 1, 0), (0, height - 1), (width - 1, height - 1)):
+                        actual, square = frame.getpixel((x + px, y + py)), reference.getpixel((px, py))
+                        self.assertGreater(max(abs(a - b) for a, b in zip(actual, square)), 8, 'every original rectangular corner reveals the soft surround rather than an opaque square print')
+                finally:
+                    frame.close(); reference.close()
 
     def test_mp4_contains_real_dissolve_and_looped_audio_to_exact_duration(self):
         audio=self.root/'short.wav'
