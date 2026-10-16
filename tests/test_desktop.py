@@ -20,6 +20,7 @@ from PIL import Image
 from desktop import DesktopBridge
 from desktop_files import reveal_in_explorer
 from desktop_downloads import VideoDownloadDialog, install_video_downloads
+from desktop_navigation import ExternalLinks, install_external_links
 from server import AlbumStore
 
 
@@ -229,11 +230,14 @@ class DesktopTests(unittest.TestCase):
         window = FakeWindow()
         controller = desktop.DesktopController(window, Path("unused"), "http://127.0.0.1:9999")
         controller.loaded.set()
-        with patch.object(desktop, "install_video_downloads", return_value=object()) as install:
+        with patch.object(desktop, "install_video_downloads", return_value=object()) as install, \
+                patch.object(desktop, "install_external_links", return_value=object()) as links:
             controller.after_start()
             if os.name == "nt":
                 install.assert_called_once_with(window, controller.origin)
                 self.assertIsNotNone(controller.video_downloads)
+                links.assert_called_once_with(window, controller.origin)
+                self.assertIsNotNone(controller.external_links)
         controller.run_smoke_test()
         window.evaluate_js.assert_not_called()
         window.toggle_fullscreen.assert_not_called()
@@ -408,6 +412,88 @@ class VideoDownloadDialogTests(unittest.TestCase):
         window.native.Invoke.assert_called_once()
         self.assertEqual(core.DownloadStarting.callbacks, [handler.on_download_starting])
         self.assertIs(handler.fallback, fallback)
+
+
+class DesktopExternalLinkTests(unittest.TestCase):
+    origin = 'http://127.0.0.1:54321'
+
+    def test_app_start_enables_external_browser_before_creating_window(self):
+        fake_webview=SimpleNamespace(settings={},create_window=Mock(return_value=FakeWindow()),start=Mock())
+        fake_server=SimpleNamespace(server_port=54321,store=Mock(),serve_forever=Mock(),shutdown=Mock(),server_close=Mock())
+        enabled=[]
+        fake_webview.create_window.side_effect=lambda *_args,**_kwargs: enabled.append(fake_webview.settings.get('OPEN_EXTERNAL_LINKS_IN_BROWSER')) or FakeWindow()
+        with tempfile.TemporaryDirectory() as folder, \
+                patch.dict(sys.modules,{'webview':fake_webview}), \
+                patch.object(desktop,'SingleInstance') as instance, \
+                patch.object(desktop,'configure_logging'), \
+                patch.object(server,'AlbumHTTPServer',return_value=fake_server):
+            instance.return_value.acquire.return_value=True
+            self.assertEqual(desktop.main(['--data-dir',folder]),0)
+        self.assertEqual(enabled,[True])
+        self.assertTrue(fake_webview.settings['ALLOW_DOWNLOADS'])
+        self.assertFalse(fake_webview.settings['ALLOW_FILE_URLS'])
+        fake_server.server_close.assert_called_once()
+
+    def test_external_navigation_and_popups_open_once_without_replacing_album(self):
+        browser = SimpleNamespace(load_url=Mock())
+        handler = ExternalLinks(browser, self.origin)
+        with patch('desktop_navigation.webbrowser.open', return_value=True) as opened, \
+                patch('desktop_navigation.threading.Thread') as worker:
+            worker.side_effect = lambda **options: SimpleNamespace(start=options['target'])
+            for method, attribute in ((handler.on_navigation_starting, 'Cancel'), (handler.on_new_window_requested, 'Handled')):
+                for url in ('https://music.gdstudio.xyz/', 'https://creativecommons.org/licenses/by/4.0/', 'https://www.naturalearthdata.com/'):
+                    with self.subTest(method=method.__name__, url=url):
+                        opened.reset_mock()
+                        args = SimpleNamespace(Uri=url, Cancel=False, Handled=False)
+                        method(None, args)
+                        self.assertTrue(getattr(args, attribute))
+                        opened.assert_called_once_with(url, new=2)
+                        self.assertTrue(worker.call_args.kwargs['daemon'])
+            browser.load_url.assert_not_called()
+            opened.side_effect = OSError('browser unavailable')
+            args = SimpleNamespace(Uri='https://music.gdstudio.xyz/', Cancel=False)
+            with self.assertLogs('shiguang.desktop', level='ERROR'):
+                handler.on_navigation_starting(None, args)
+            self.assertTrue(args.Cancel, 'a failed browser launch still keeps the album visible')
+
+    def test_album_downloads_remain_local_and_other_schemes_cannot_replace_window(self):
+        browser = SimpleNamespace(load_url=Mock()); handler = ExternalLinks(browser, self.origin)
+        with patch.object(handler, 'open_external') as opened:
+            for suffix in ('/?desktop=1', '/#photos', '/api/backup', '/api/export', '/media/originals/a.jpg', '/api/video-jobs/'+'a'*32+'/file?download=1'):
+                args = SimpleNamespace(Uri=self.origin+suffix, Cancel=False)
+                handler.on_navigation_starting(None, args)
+                self.assertFalse(args.Cancel)
+            opened.assert_not_called()
+            args = SimpleNamespace(Uri=self.origin+'/api/backup', Handled=False)
+            handler.on_new_window_requested(None, args)
+            self.assertTrue(args.Handled); browser.load_url.assert_called_once_with(args.Uri)
+            for uri in ('http://127.0.0.1:54322/', 'http://localhost:54321/', 'https://127.0.0.1:54321/', 'http://127.0.0.1:54321@other.example/', 'http://127.0.0.1:invalid/'):
+                args = SimpleNamespace(Uri=uri, Cancel=False)
+                handler.on_navigation_starting(None, args)
+                self.assertTrue(args.Cancel)
+        with patch('desktop_navigation.threading.Thread') as worker:
+            for uri in ('javascript:alert(1)', 'file:///C:/private.txt', 'data:text/html,hello', 'about:blank', 'https://user:password@example.com/', 'https://example.com:invalid/', 'https://example.com/\nwrong'):
+                handler.open_external(uri)
+            worker.assert_not_called()
+
+    def test_event_adapter_uses_gui_thread_and_restores_popup_handler_on_failure(self):
+        class Event:
+            def __init__(self, callbacks=(), fail=False): self.callbacks=list(callbacks); self.fail=fail
+            def __iadd__(self, callback):
+                if self.fail: raise RuntimeError('subscription failed')
+                self.callbacks.append(callback); return self
+            def __isub__(self, callback): self.callbacks.remove(callback); return self
+        fallback=Mock(); core=SimpleNamespace(NewWindowRequested=Event([fallback]), NavigationStarting=Event())
+        browser=SimpleNamespace(on_new_window_request=fallback, webview=SimpleNamespace(CoreWebView2=core))
+        window=SimpleNamespace(native=SimpleNamespace(browser=browser, Invoke=Mock(side_effect=lambda action:action())))
+        with patch.dict(sys.modules, {'System':SimpleNamespace(Action=lambda function:function)}):
+            handler=install_external_links(window, self.origin)
+            self.assertEqual(core.NewWindowRequested.callbacks,[handler.on_new_window_requested])
+            self.assertEqual(core.NavigationStarting.callbacks,[handler.on_navigation_starting])
+            window.native.Invoke.assert_called_once()
+            core.NewWindowRequested=Event([fallback]);core.NavigationStarting=Event(fail=True)
+            with self.assertRaisesRegex(RuntimeError,'subscription failed'): install_external_links(window,self.origin)
+            self.assertEqual(core.NewWindowRequested.callbacks,[fallback])
 
 
 class DesktopPhotoLocationTests(unittest.TestCase):

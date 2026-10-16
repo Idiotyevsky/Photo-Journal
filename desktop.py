@@ -18,6 +18,7 @@ import time
 from typing import Any
 
 from desktop_downloads import install_video_downloads
+from desktop_navigation import install_external_links
 
 
 APP_NAME = "拾光"
@@ -347,6 +348,7 @@ class DesktopController:
         self.close_check = threading.Event()
         self.smoke_result: dict | None = None
         self.video_downloads = None
+        self.external_links = None
         window.events.loaded += self.loaded.set
         window.events.closed += self.closed.set
         window.events.closing += self.on_closing
@@ -403,6 +405,11 @@ class DesktopController:
                 self.window.destroy()
                 return
         if os.name == "nt":
+            try:
+                self.external_links = install_external_links(self.window, self.origin)
+                LOG.info("External links routed to the system browser")
+            except Exception:
+                LOG.exception("Could not configure external link navigation")
             try:
                 self.video_downloads = install_video_downloads(self.window, self.origin)
                 LOG.info("MP4 video save dialog installed")
@@ -529,7 +536,7 @@ def main(argv: list[str] | None = None) -> int:
         LOG.info("Opening native album window: %s; data=%s", origin, data_dir)
         webview.settings["ALLOW_DOWNLOADS"] = True
         webview.settings["ALLOW_FILE_URLS"] = False
-        webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = False
+        webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = True
         webview.settings["OPEN_DEVTOOLS_IN_DEBUG"] = False
         fullscreen_api = DesktopBridge(album_server.store)
         window = webview.create_window(
