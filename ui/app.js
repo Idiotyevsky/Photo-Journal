@@ -32,7 +32,7 @@
   };
   const icon = (name, extra = '') => `<svg class="icon ${extra}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.photo}</svg>`;
   const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, char => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[char]));
-  const state = { photos: [], journals: [], collections: [], view: 'collections', search: '', sort: 'date-desc', layout: 'grid', scope: null, loading: true, error: '', modal: null, lightboxId: null, files: [], importing: false, importResults: [], importProgress: 0, importDone: false, skippedFiles: 0, storageBytes: 0, selectionMode: false, selectedIds: new Set() };
+  const state = { photos: [], journals: [], deletedJournalKeys: new Set(), collections: [], view: 'collections', search: '', sort: 'date-desc', layout: 'grid', scope: null, loading: true, error: '', modal: null, lightboxId: null, files: [], importing: false, importResults: [], importProgress: 0, importDone: false, skippedFiles: 0, storageBytes: 0, selectionMode: false, selectedIds: new Set() };
   window.shiguangIsImporting = () => state.importing || Boolean(window.ShiguangSettings?.isImporting());
   window.ShiguangAtlas?.configure({getState:()=>state,api,modalFrame,showModal,renderModal,closeModal,toast,icon,redraw:()=>{if(state.view==='places'&&!state.scope)updateCollection();},openPlace:openPlaceScope,openCountry:code=>{code=String(code||'').toUpperCase();state.scope={type:'country',key:code,title:countryName(code)||'待补充国家'};state.view='photos';state.search='';state.layout='grid';clearSelection();render();}});
   window.ShiguangMusic?.configure({onError:message=>toast(message,'error')});
@@ -124,7 +124,7 @@
     state.journals.forEach(record => {
       if (!groups.has(record.key) && (!query || [record.title,record.note,record.key].some(text=>String(text||'').toLocaleLowerCase().includes(query)))) groups.set(record.key, []);
     });
-    return [...groups];
+    return [...groups].filter(([key])=>!state.deletedJournalKeys.has(key));
   }
   function photoDateRange(photos) {
     const dates = photos.map(photo=>photo.taken_at).filter(Boolean).sort();
@@ -151,6 +151,7 @@
       state.photos = photos.photos;
       state.storageBytes = photos.storage_bytes || 0;
       state.journals = journals.journals;
+      state.deletedJournalKeys = new Set(journals.deleted_journal_keys || []);
       state.collections = collections.collections;
       const existingIds = new Set(state.photos.map(photo => photo.id));
       state.selectedIds = new Set([...state.selectedIds].filter(id => existingIds.has(id)));
@@ -159,6 +160,7 @@
         if (collection) state.scope.title = collection.title;
         else { state.scope = null; clearSelection(); }
       }
+      if (state.scope?.type === 'journal' && state.deletedJournalKeys.has(state.scope.key)) {state.scope=null;state.view='journal';state.search='';clearSelection();}
       state.error = '';
     } catch (error) { state.error = error.message; }
     state.loading = false;
@@ -212,7 +214,7 @@
     const descriptions = {collections:'按旅行、地点或主题，整理自己的摄影作品。',photos:'按时间、地点与作品集，整理自己的摄影作品。',timeline:'以拍摄时间为序，翻阅过去的影像。',places:'从地点，重访照片里的片刻。',journal:'记下照片以外的见闻。',favorites:'留作反复观看的照片。'};
     const heading = collection?.title || state.scope?.title || headings[state.view];
     const description = placesPage ? '' : collection ? (collection.description || '') : state.scope?.type === 'place' ? '同一处风景，每一次相遇都有不同。' : state.scope?.type === 'journal' ? '一些沿途的光影，和想要留下的话。' : descriptions[state.view];
-    const headingActions = collection ? `<div class="heading-actions"><button class="button secondary" data-action="video-open" data-id="${esc(collection.id)}" ${collection.photo_ids.length?'':'disabled'}>${icon('video')} 导出视频</button><button class="button secondary" data-action="edit-collection" data-id="${esc(collection.id)}">${icon('edit')} 编辑作品集</button><button class="button secondary" data-action="add-existing" data-id="${esc(collection.id)}">${icon('grid')} 从已有照片添加</button><button class="button primary" data-action="import">${icon('upload')} 批量导入</button></div>` : state.scope?.type === 'journal' ? `<button class="button secondary" data-action="edit-journal">${icon('edit')} 写旅行手记</button>` : '';
+    const headingActions = collection ? `<div class="heading-actions"><button class="button secondary" data-action="video-open" data-id="${esc(collection.id)}" ${collection.photo_ids.length?'':'disabled'}>${icon('video')} 导出视频</button><button class="button secondary" data-action="edit-collection" data-id="${esc(collection.id)}">${icon('edit')} 编辑作品集</button><button class="button secondary" data-action="add-existing" data-id="${esc(collection.id)}">${icon('grid')} 从已有照片添加</button><button class="button primary" data-action="import">${icon('upload')} 批量导入</button></div>` : state.scope?.type === 'journal' ? `<div class="heading-actions"><button class="button secondary" data-action="edit-journal">${icon('edit')} 写旅行手记</button><button class="icon-button journal-delete-detail" data-action="delete-journal" data-key="${esc(state.scope.key)}" title="删除旅途记忆" aria-label="删除${esc(state.scope.title)}">${icon('trash')}</button></div>` : '';
     const scopeIcon = collection ? 'folder' : ['place','country'].includes(state.scope?.type) ? 'pin' : 'book';
     const backText = collection ? '返回作品集' : ['place','country'].includes(state.scope?.type) ? '返回拍摄地点' : '返回旅行手记';
     const stats = state.scope ? `<button class="inline-link" data-action="clear-scope">${icon('left')} ${backText}</button>${collection ? `<div class="collection-detail-header"><div class="collection-cover-small">${collection.cover_url ? `<img src="${esc(collection.cover_url)}" alt="作品集封面">` : `<div class="collection-placeholder">${icon('folder')}</div>`}</div><div><div class="collection-meta"><span>${icon('photo')} ${collection.photo_ids.length} 张照片</span>${collection.place ? `<span>${icon('pin')} ${esc(collection.place)}</span>` : ''}</div></div></div>` : `<div class="filter-chip">${icon(scopeIcon)}<span>${esc(state.scope.title)}</span><button data-action="clear-scope" aria-label="${backText}">${icon('close')}</button></div>`}` : `<div class="stats-row"><div class="stat"><span class="stat-value">${state.collections.length}</span><span class="stat-label">份作品集</span></div><div class="stat"><span class="stat-value">${state.photos.length}</span><span class="stat-label">张摄影作品</span></div><div class="stat"><span class="stat-value">${new Set(state.photos.map(photoCity).filter(Boolean)).size}</span><span class="stat-label">个拍摄地点</span></div></div>`;
@@ -244,7 +246,11 @@
     if (state.view === 'places') return renderPlaces(filteredPhotos());
     const photos = filteredPhotos();
     if (currentCollection() && !photos.length) return `${renderSelectionToolbar()}<section class="empty-small collection-empty">${icon(state.search ? 'search' : 'folder')}<h2>${state.search ? '这里还没有匹配的照片' : '作品集已经建好，放进第一组照片吧。'}</h2><p>${state.search ? '试试其他关键词，或清空搜索查看全部照片。' : '可以一次选择多张照片，也可以把整个旅行文件夹导入。'}</p><div class="empty-actions">${state.search ? '<button class="button secondary" data-action="clear-search">清空搜索</button>' : `<button class="button primary" data-action="import">${icon('upload')} 批量导入照片</button><button class="button secondary" data-action="add-existing" data-id="${esc(currentCollection().id)}">从已有照片添加</button>`}</div><p class="batch-hint">同一张照片可以加入多个作品集，不会重复保存原图。</p></section>`;
-    if (state.view === 'journal' && journalGroups(photos).length) return renderJournals(journalGroups(photos));
+    if (state.view === 'journal') {
+      const groups=journalGroups(photos);
+      if(groups.length)return renderJournals(groups);
+      return `<section class="empty-small">${icon('book')}<h2>${state.search?'没有找到匹配的旅途记忆':'这里还没有旅途记忆'}</h2>${state.search?'<button class="button secondary" data-action="clear-search">清空搜索</button>':''}</section>`;
+    }
     if (!photos.length && state.scope?.type === 'journal' && !state.search) return `<section class="empty-small">${icon('book')}<h2>文字还在，等新的风景到来。</h2><p>这篇手记暂时没有关联照片，你可以继续编辑文字，或导入新的作品。</p><button class="button secondary" data-action="import">${icon('plus')} 导入照片</button></section>`;
     if (!state.photos.length && !state.search) return `<section class="empty-state">${emptyArt()}<span class="empty-kicker">THE FIRST PHOTOGRAPH</span><h2>从第一张照片开始。</h2><div class="empty-actions"><button class="button primary" data-action="import">${icon('plus')} 导入我的照片 ${icon('arrow')}</button></div><div class="empty-footnote">${icon('upload')} 也可以将照片直接拖到这里</div></section>`;
     if (!photos.length) return `<section class="empty-small">${icon(state.view === 'favorites' ? 'heart' : 'search')}<h2>${state.search ? '还没有找到这些瞬间' : state.view === 'favorites' ? '把喜欢的瞬间，留在这里。' : '这里暂时还没有照片'}</h2><p>${state.search ? '试试其他地点、作品名称，或清空搜索。' : '打开照片，点亮爱心，就能在这里再次相遇。'}</p>${state.search ? '<button class="button secondary" data-action="clear-search">清空搜索</button>' : '<button class="button secondary" data-action="browse-photos">浏览全部照片</button>'}</section>`;
@@ -264,7 +270,10 @@
     return `${window.ShiguangAtlas ? window.ShiguangAtlas.render(state.photos) : ''}${renderToolbar('',false,false,[['date-desc','拍摄时间 · 由近及远'],['date-asc','拍摄时间 · 由远及近'],['import-desc','最近导入'],['name','作品名称']])}<div class="photo-count">${groups.filter(({place})=>place).length} 个拍摄地点${groups.some(({place})=>!place) ? ' · 含待补充地点的照片' : ''}</div><div class="place-grid">${groups.map(({place,country,items}) => `<button class="place-card" data-action="open-place" data-key="${esc(place)}" data-country="${esc(country)}"><div class="place-cover"><img src="${esc(items[0].thumbnail_url)}" loading="lazy" alt=""><span class="place-count">${items.length} 张作品</span></div><div class="place-info"><div><h3>${icon('pin')}${esc(placeTitle(place,items))}</h3><p>${esc(photoDateRange(items))}</p></div>${icon('arrow')}</div></button>`).join('')}</div>`;
   }
   function renderJournals(groups) {
-    return `<div class="photo-count">${groups.length} 段旅途记忆</div><div class="journal-grid">${groups.map(([key, items]) => { const record = journalRecord(key); const places = [...new Set(items.map(photo => photoLocation(photo,'')).filter(Boolean))]; return `<button class="journal-card" data-action="open-journal" data-key="${esc(key)}"><div class="journal-cover">${items[0] ? `<img src="${esc(items[0].thumbnail_url)}" alt="" loading="lazy">` : `<div class="journal-empty-cover">${icon('book')}<span>留下文字，也留下回忆。</span></div>`}<span>${items.length ? `${items.length} 个瞬间` : '文字手记'}</span></div><div class="journal-body"><div class="journal-date">${items[0] ? monthTitle(monthKey(items[0])) : '文字记忆'} · JOURNEY</div><h2>${esc(journalTitle(key, items))}</h2>${record?.note ? `<p class="journal-excerpt">${esc(record.note)}</p>` : ''}<div class="journal-meta"><span>${icon('pin')}${esc(places.join(' · ') || (items.length ? '地点待补充' : '手记已独立保存'))}</span><span>翻开手记 ${icon('arrow')}</span></div></div></button>`; }).join('')}</div>`;
+    return `<div class="photo-count">${groups.length} 段旅途记忆</div><div class="journal-grid">${groups.map(([key, items]) => {
+      const record=journalRecord(key),title=journalTitle(key,items),places=[...new Set(items.map(photo=>photoLocation(photo,'')).filter(Boolean))];
+      return `<article class="journal-card"><button class="journal-open" data-action="open-journal" data-key="${esc(key)}"><div class="journal-cover">${items[0]?`<img src="${esc(items[0].thumbnail_url)}" alt="" loading="lazy">`:`<div class="journal-empty-cover">${icon('book')}<span>留下文字，也留下回忆。</span></div>`}<span>${items.length?`${items.length} 个瞬间`:'文字手记'}</span></div><div class="journal-body"><div class="journal-date">${items[0]?monthTitle(monthKey(items[0])):'文字记忆'} · JOURNEY</div><h2>${esc(title)}</h2>${record?.note?`<p class="journal-excerpt">${esc(record.note)}</p>`:''}<div class="journal-meta"><span>${icon('pin')}${esc(places.join(' · ')||(items.length?'地点待补充':'手记已独立保存'))}</span><span>翻开手记 ${icon('arrow')}</span></div></div></button><button class="icon-button journal-delete" data-action="delete-journal" data-key="${esc(key)}" title="删除旅途记忆" aria-label="删除${esc(title)}">${icon('trash')}</button></article>`;
+    }).join('')}</div>`;
   }
   function updateCollection() {
     const focused = document.activeElement;
@@ -379,6 +388,8 @@
       const photos = state.photos.filter(photo=>journalKey(photo)===key);
       const record = journalRecord(key);
       modalRoot.innerHTML = modalFrame('旅行手记', '这篇手记会和这段旅程的照片一起保存在本地。', `<form id="edit-journal-form"><div class="field"><label for="journal-title">手记标题</label><input id="journal-title" name="title" required maxlength="200" value="${esc(journalTitle(key, photos))}"></div><div class="field"><label for="journal-note">旅行手记</label><textarea id="journal-note" name="note" rows="9" maxlength="50000" placeholder="出发的缘由、难忘的片刻、下一次还想去的地方…">${esc(record?.note || '')}</textarea></div></form>`, `<button class="button ghost" data-action="close-modal">取消</button><button class="button primary" data-action="save-journal">${icon('check')} 保存手记</button>`, 'edit-modal');
+    } else if (type === 'journal-delete') {
+      modalRoot.innerHTML=modalFrame('删除这段旅途记忆？',esc(state.modal.title),`<div class="note-callout">${icon('info')}<span>这段记忆及手记文字将被移除，照片和作品集会保留。</span></div>`,`<button class="button ghost" data-action="close-modal">取消</button><button class="button danger" data-action="confirm-delete-journal">${icon('trash')} 删除</button>`,'edit-modal');
     } else if (type === 'delete') {
       modalRoot.innerHTML = modalFrame('从相册中移除这张照片？', '将删除相册保存的照片副本及其文字记录。', `<div class="note-callout">${icon('info')}<span>你最初选择导入的文件不会受到影响。移除后可以重新导入，但相册中的编辑和收藏会丢失。</span></div>`, `<button class="button ghost" data-action="back-photo" data-id="${esc(state.modal.id)}">保留照片</button><button class="button danger" data-action="confirm-delete" data-id="${esc(state.modal.id)}">${icon('trash')} 移除照片</button>`, 'edit-modal');
     } else if (type === 'about') {
@@ -559,11 +570,25 @@
       const result = await api(`/api/journals/${encodeURIComponent(key)}`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(fields)});
       const journal = result.journal || result;
       state.journals = [...state.journals.filter(item=>item.key!==key), journal];
+      state.deletedJournalKeys.delete(key);
       if (state.scope?.key === key) state.scope.title = journal.title;
       closeModal();
       render();
       toast('这段旅途的故事，已经保存。');
     } finally { if (button.isConnected) button.disabled = false; }
+  }
+  async function deleteJournal(target) {
+    const modal=state.modal;
+    if(modal?.type!=='journal-delete'||modal.busy)return;
+    modal.busy=true;target.disabled=true;
+    try {
+      const key=modal.key;
+      await api(`/api/journals/${encodeURIComponent(key)}`,{method:'DELETE'});
+      state.journals=state.journals.filter(item=>item.key!==key);
+      state.deletedJournalKeys.add(key);
+      if(state.scope?.type==='journal'&&state.scope.key===key){state.scope=null;state.view='journal';state.search='';clearSelection();}
+      closeModal(true);render();toast('旅途记忆已删除。');
+    } finally {modal.busy=false;if(target.isConnected)target.disabled=false;}
   }
   async function saveCollection() {
     const form = document.getElementById('collection-form');
@@ -703,6 +728,11 @@
     } else if (name === 'clear-scope') {state.view=state.scope.type === 'collection' ? 'collections' : ['place','country'].includes(state.scope.type) ? 'places' : 'journal'; state.scope=null; state.search='';state.layout='grid';clearSelection(); render();}
     else if (name === 'edit-journal') showModal('journal-edit', {key:state.scope.key});
     else if (name === 'save-journal') await saveJournal();
+    else if (name === 'delete-journal') {
+      const key=target.dataset.key;
+      showModal('journal-delete',{key,title:journalTitle(key,state.photos.filter(photo=>journalKey(photo)===key))});
+    }
+    else if (name === 'confirm-delete-journal') await deleteJournal(target);
     else if (name === 'about') showModal('about');
     else if (name === 'retry') {state.loading=true;render();await refresh();}
   }

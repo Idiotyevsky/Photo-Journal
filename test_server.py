@@ -536,6 +536,107 @@ class AlbumTests(unittest.TestCase):
         self.assertEqual(self.request("GET", "/api/photos")[1]["photos"], [])
         self.assertEqual(self.request("GET", "/api/journals")[1]["journals"][0]["note"], "走过湖边。")
 
+    def test_delete_generated_journals_preserves_photos_collections_and_other_notes(self):
+        trip = "江南/湖畔"
+        first = self.import_image(suffix="&trip=" + quote(trip, safe=""))[1]["photo"]
+        buffer = io.BytesIO()
+        Image.new("RGB", (32, 20), "navy").save(buffer, "JPEG")
+        second = self.import_image(body=buffer.getvalue(), filename="另一张.jpg")[1]["photo"]
+        collection = self.create_collection("保留的作品集")
+        self.json_request("POST", "/api/collections/" + collection["id"] + "/photos", {"photo_ids": [first["id"], second["id"]]})
+        self.json_request("POST", "/api/journals/" + quote("trip:其他旅行", safe=""), {"title": "其他手记", "note": "保留正文"})
+        photos_before = self.request("GET", "/api/photos")[1]
+        collections_before = self.request("GET", "/api/collections")[1]
+        keys = ["trip:" + trip, "month:2025-05"]
+        for key in keys:
+            path = "/api/journals/" + quote(key, safe="")
+            for _ in range(2):
+                self.assertEqual(self.request("DELETE", path), (200, {"deleted": key}))
+        status, journals = self.request("GET", "/api/journals")
+        self.assertEqual(status, 200)
+        self.assertEqual(journals["deleted_journal_keys"], sorted(keys))
+        self.assertEqual([item["key"] for item in journals["journals"]], ["trip:其他旅行"])
+        self.assertEqual(journals["journals"][0]["note"], "保留正文")
+        self.assertEqual(self.request("GET", "/api/photos")[1], photos_before)
+        self.assertEqual(self.request("GET", "/api/collections")[1], collections_before)
+        self.assertEqual(self.request("GET", first["url"]), (200, self.image))
+        self.assertEqual(self.request("GET", second["url"]), (200, buffer.getvalue()))
+        self.assertEqual(server.AlbumStore(self.server.store.root).journals(), journals)
+        with self.server.store.connect() as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM journal_deletions WHERE deleted_at <> ''").fetchone()[0], 2)
+
+    def test_delete_written_unicode_slash_journal_and_save_recreates_it(self):
+        key = "trip:意大利/佛罗伦萨：清晨"
+        path = "/api/journals/" + quote(key, safe="")
+        self.assertEqual(self.json_request("POST", path, {"title": "旧手记", "note": "旧文字"})[0], 200)
+        self.assertEqual(self.request("DELETE", path), (200, {"deleted": key}))
+        self.assertEqual(self.request("GET", "/api/journals")[1], {"journals": [], "deleted_journal_keys": [key]})
+        self.assertEqual(self.json_request("POST", path, {"title": False})[0], 400)
+        self.assertEqual(self.json_request("POST", path, {"unsupported": "不能重建"})[0], 400)
+        self.assertEqual(self.request("GET", "/api/journals")[1]["deleted_journal_keys"], [key])
+        status, saved = self.json_request("POST", path, {"title": "重新启程", "note": "新的文字"})
+        self.assertEqual(status, 200)
+        self.assertEqual(saved["journal"]["key"], key)
+        self.assertEqual(saved["journal"]["note"], "新的文字")
+        persisted = server.AlbumStore(self.server.store.root).journals()
+        self.assertEqual(persisted["journals"], [saved["journal"]])
+        self.assertEqual(persisted["deleted_journal_keys"], [])
+
+    def test_journal_deletion_rejects_invalid_keys_and_cross_origin_without_changes(self):
+        key = "trip:应保留"
+        path = "/api/journals/" + quote(key, safe="")
+        self.json_request("POST", path, {"title": "不能删除", "note": "原文"})
+        before = self.request("GET", "/api/journals")[1]
+        for invalid in ("", "trip:", "month:", "journey:江南", "trip:" + "长" * 646):
+            invalid_path = "/api/journals/" + quote(invalid, safe="")
+            with self.subTest(key=invalid):
+                self.assertEqual(self.request("DELETE", invalid_path)[0], 400)
+                self.assertEqual(self.json_request("POST", invalid_path, {"note": "不能保存"})[0], 400)
+        self.assertEqual(self.request("DELETE", path, headers={"Origin": "https://example.com"})[0], 403)
+        self.assertEqual(self.request("DELETE", path, headers={"Sec-Fetch-Site": "cross-site"})[0], 403)
+        self.assertEqual(self.request("GET", "/api/journals")[1], before)
+        for invalid in (None, 123, {}):
+            with self.subTest(non_string_key=invalid):
+                with self.assertRaises(server.ApiError):
+                    self.server.store.delete_journal(invalid)
+
+    def test_journal_delete_and_rebuild_roll_back_together_on_database_failure(self):
+        key = "trip:原子保存"
+        path = "/api/journals/" + quote(key, safe="")
+        saved = self.json_request("POST", path, {"title": "保留手记", "note": "事务前文字"})[1]["journal"]
+        with self.server.store.connect() as db:
+            db.execute("CREATE TRIGGER reject_journal_deletion BEFORE INSERT ON journal_deletions BEGIN SELECT RAISE(ABORT,'injected deletion failure'); END")
+        self.assertEqual(self.request("DELETE", path)[0], 500)
+        self.assertEqual(self.request("GET", "/api/journals")[1], {"journals": [saved], "deleted_journal_keys": []})
+        with self.server.store.connect() as db:
+            db.execute("DROP TRIGGER reject_journal_deletion")
+        self.assertEqual(self.request("DELETE", path)[0], 200)
+        with self.server.store.connect() as db:
+            db.execute("CREATE TRIGGER reject_journal_rebuild BEFORE DELETE ON journal_deletions BEGIN SELECT RAISE(ABORT,'injected rebuild failure'); END")
+        self.assertEqual(self.json_request("POST", path, {"title": "不应保存", "note": "新文字"})[0], 500)
+        self.assertEqual(self.request("GET", "/api/journals")[1], {"journals": [], "deleted_journal_keys": [key]})
+
+    def test_journal_deletions_are_in_json_export_and_complete_migration_snapshot(self):
+        deleted = ["trip:江南/春天", "month:2025-05"]
+        for key in deleted:
+            self.assertEqual(self.request("DELETE", "/api/journals/" + quote(key, safe=""))[0], 200)
+        self.json_request("POST", "/api/journals/" + quote("trip:仍在的手记", safe=""), {"note": "随迁移保留"})
+        exported = self.request("GET", "/api/export")[1]
+        self.assertEqual(exported["deleted_journal_keys"], sorted(deleted))
+        status, archive_bytes = self.request("GET", "/api/backup")
+        self.assertEqual(status, 200)
+        with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
+            database = self.root / "migrated-journals" / "album.sqlite3"
+            database.parent.mkdir()
+            database.write_bytes(archive.read("拾光相册/album-data/album.sqlite3"))
+        with closing(sqlite3.connect(database)) as snapshot:
+            rows = snapshot.execute("SELECT key, deleted_at FROM journal_deletions ORDER BY key").fetchall()
+            self.assertEqual([row[0] for row in rows], sorted(deleted))
+            self.assertTrue(all(row[1] for row in rows))
+            self.assertEqual(snapshot.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+        migrated = server.AlbumStore(database.parent)
+        self.assertEqual(migrated.journals(), {name: exported[name] for name in ("journals", "deleted_journal_keys")})
+
     def test_exif_orientation_date_camera_and_tiff_preview(self):
         photo = Image.new("RGB", (80, 40), "navy")
         exif = Image.Exif()
@@ -748,6 +849,9 @@ class AlbumTests(unittest.TestCase):
         self.assertEqual(migrated.collections(), {"collections": []})
         self.assertEqual(migrated.atlas(), {"stops": [], "updated_at": None})
         self.assertEqual(migrated.journals()["journals"][0]["note"], "不得改动的文字")
+        self.assertEqual(migrated.journals()["deleted_journal_keys"], [])
+        with migrated.connect() as db:
+            self.assertEqual([row["name"] for row in db.execute("PRAGMA table_info(journal_deletions)")], ["key", "deleted_at"])
         new_collection = migrated.create_collection({"title": "新作品集"})["collection"]
         self.assertEqual(new_collection["route_stops"], [])
         self.assertIsNone(new_collection["route_updated_at"])

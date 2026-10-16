@@ -33,6 +33,7 @@
 - 画廊保留完整构图；点击照片查看大图，键盘左右键切换，Esc 关闭。支持收藏、搜索、排序、编辑信息和下载原图。
 - 按时间轴或拍摄地点浏览作品。同名旅程的照片汇成一篇手记，未指定旅程时按月份汇集。
 - 手记独立保存；照片重新归类或移除后，已经写下的文字仍可阅读和编辑。
+- 点击旅途记忆卡片右下角或手记详情中的垃圾桶图标，可删除这段记忆及文字，照片和作品集仍保留。删除结果会随相册资料保存，重新打开不会自动生成回来。
 
 ## 白边作品导出
 
@@ -138,6 +139,7 @@
     node --check ui/app.js
     node test_atlas.cjs
     node test_atlas_vector.cjs
+    node test_journals.cjs
     node test_fullscreen.cjs
     node test_music.cjs
     node test_video_export.cjs

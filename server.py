@@ -65,6 +65,13 @@ def clean_text(value, limit: int, field: str = "文字") -> str:
     return value.strip().replace("\x00", "")
 
 
+def journal_key(value) -> str:
+    key = clean_text(value, 650, "手记标识")
+    if not key.startswith(("trip:", "month:")) or not key.split(":", 1)[1]:
+        raise ApiError(400, "手记标识格式不正确。")
+    return key
+
+
 def country_code(value) -> str:
     country = clean_text("" if value is None else value, 2, "国家代码")
     if country and not re.fullmatch(r"[A-Z]{2}", country):
@@ -350,6 +357,9 @@ class AlbumStore:
                 CREATE TABLE IF NOT EXISTS journals (
                     key TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '',
                     note TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS journal_deletions (
+                    key TEXT PRIMARY KEY, deleted_at TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS collections (
                     id TEXT PRIMARY KEY, title TEXT NOT NULL,
@@ -1081,13 +1091,14 @@ class AlbumStore:
                     self.clean_staged(staged)
 
     def journals(self) -> dict:
-        with self.connect() as db:
-            return {"journals": [dict(row) for row in db.execute("SELECT * FROM journals ORDER BY updated_at DESC, key").fetchall()]}
+        with self.lock, self.connect() as db:
+            return {
+                "journals": [dict(row) for row in db.execute("SELECT * FROM journals ORDER BY updated_at DESC, key").fetchall()],
+                "deleted_journal_keys": [row["key"] for row in db.execute("SELECT key FROM journal_deletions ORDER BY key").fetchall()],
+            }
 
     def update_journal(self, key: str, changes: dict) -> dict:
-        key = clean_text(key, 650, "手记标识")
-        if not key.startswith(("trip:", "month:")) or not key.split(":", 1)[1]:
-            raise ApiError(400, "手记标识格式不正确。")
+        key = journal_key(key)
         if not isinstance(changes, dict) or set(changes) - {"title", "note"}:
             raise ApiError(400, "手记中包含不支持的字段。")
         with self.lock, self.connect() as db:
@@ -1095,7 +1106,15 @@ class AlbumStore:
             title = clean_text(changes.get("title", previous["title"] if previous else ""), 300, "手记标题")
             note = clean_text(changes.get("note", previous["note"] if previous else ""), 50000, "手记正文")
             db.execute("INSERT INTO journals(key,title,note,updated_at) VALUES(?,?,?,?) ON CONFLICT(key) DO UPDATE SET title=excluded.title,note=excluded.note,updated_at=excluded.updated_at", (key, title, note, now()))
+            db.execute("DELETE FROM journal_deletions WHERE key = ?", (key,))
             return {"journal": dict(db.execute("SELECT * FROM journals WHERE key = ?", (key,)).fetchone())}
+
+    def delete_journal(self, key: str) -> dict:
+        key = journal_key(key)
+        with self.lock, self.connect() as db:
+            db.execute("DELETE FROM journals WHERE key = ?", (key,))
+            db.execute("INSERT INTO journal_deletions(key,deleted_at) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET deleted_at=excluded.deleted_at", (key, now()))
+        return {"deleted": key}
 
 
 class AlbumHTTPServer(ThreadingHTTPServer):
@@ -1253,6 +1272,8 @@ class AlbumHandler(BaseHTTPRequestHandler):
                 self.send_json(200, store.delete_collection(path.rsplit("/", 1)[1]))
             elif self.command == "DELETE" and re.fullmatch(r"/api/photos/[a-f0-9]{32}", path):
                 self.send_json(200, store.delete_photo(path.rsplit("/", 1)[1]))
+            elif self.command == "DELETE" and path.startswith("/api/journals/"):
+                self.send_json(200, store.delete_journal(path[len("/api/journals/"):]))
             else:
                 raise ApiError(405, "不支持这个操作。")
         except (ApiError, VideoJobError) as error:
