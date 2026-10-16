@@ -35,6 +35,14 @@
 - 手记独立保存；照片重新归类或移除后，已经写下的文字仍可阅读和编辑。
 - 点击旅途记忆卡片右下角或手记详情中的垃圾桶图标，可删除这段记忆及文字，照片和作品集仍保留。删除结果会随相册资料保存，重新打开不会自动生成回来。
 
+## 色彩足迹
+
+点击左侧「色彩足迹」，可按月份、季度或年份翻阅照片的主要色彩、明暗、饱和度与冷暖倾向。「我的收藏」复用照片上的爱心，便于单独观察自己精选作品的色调。
+
+每个时期展示按占比排列的主色色带和代表照片。点击色块可查看对这一颜色有明显贡献的照片，点击代表照片可打开大图；也可以展开「比较两段时光」，并排查看两个时期的色卡与画面倾向。导入、收藏、修改拍摄日期或移除照片后，统计会自动更新。
+
+分析在本机完成，使用保留完整构图的预览图并转换到 sRGB；每张照片等权参与，原图不改写。色彩反映拍摄题材和后期共同形成的画面效果，冷暖数值不是相机白平衡色温。日期缺失的照片单独归为「未注明日期」，无法读取的图片不参与颜色统计。采样缓存为可重新生成的衍生数据，迁移后首次打开会自动重建。
+
 ## 白边作品导出
 
 打开照片后，点击大图右上角的「导出作品」，查看实际生成的「白边作品」预览。照片下方紧凑的经典白条会显示相机标识与拍摄参数；信息取自拍摄资料，缺失项自动省略。
@@ -123,7 +131,7 @@
 
 本项目仅提供 Windows 桌面 APP，启动入口为 desktop.py。ui/ 是桌面窗口的内嵌界面资源；server.py 是随窗口启动、关闭的内部本地服务，不提供独立网站启动方式。
 
-其他源码为 photo_export.py（白边图片导出）、video_export.py 与 video_jobs.py（视频制作和任务）。发布程序已经包含 Python、视频编码组件和所需库，日常使用只需双击 EXE。
+其他源码为 color_analysis.py（本地色彩统计）、photo_export.py（白边图片导出）、video_export.py 与 video_jobs.py（视频制作和任务）。发布程序已经包含 Python、视频编码组件和所需库，日常使用只需双击 EXE。
 
 开发环境需要 Python 3.12，在项目目录运行：
 
@@ -135,7 +143,7 @@
 
 验证：
 
-    python -m unittest -v test_desktop test_server test_photo_export test_video_api test_video_export
+    python -m unittest -v test_desktop test_server test_photo_export test_video_api test_video_export test_color_analysis test_colors_api
     node --check ui/app.js
     node test_atlas.cjs
     node test_atlas_vector.cjs
@@ -143,6 +151,8 @@
     node test_fullscreen.cjs
     node test_music.cjs
     node test_video_export.cjs
+    node test_colors.cjs
+    node test_colors_app.cjs
 
 测试使用临时目录，不修改个人照片。
 

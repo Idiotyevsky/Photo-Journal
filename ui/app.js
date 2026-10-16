@@ -28,6 +28,7 @@
     lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4m-4 5v2"/>',
     settings: '<path d="m9 3-.7 2.1-2 .8-2-.5-2 3.5 1.5 1.6-.2 2.2L2 14l2 3.5 2.2-.4 1.8 1.3.5 2.2h4l.8-2.1 2-.8 2 .5 2-3.5-1.5-1.6.2-2.2L22 10l-2-3.5-2.2.4L16 5.6 15.5 3h-4Z"/><circle cx="12" cy="12" r="3"/>',
     video: '<rect x="3" y="4" width="18" height="16" rx="1"/><path d="m10 8 6 4-6 4V8ZM3 8h3M3 16h3M18 8h3M18 16h3"/>',
+    palette: '<circle cx="12" cy="12" r="9"/><path d="M12 3v9l7.8 4.5M12 12l-7.8 4.5"/><circle cx="12" cy="12" r="2"/>',
     leaf: '<path d="M20 3C9 2 3 7 5 14s15 7 15-11ZM5 21 16 9"/>',
   };
   const icon = (name, extra = '') => `<svg class="icon ${extra}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.photo}</svg>`;
@@ -39,7 +40,12 @@
   window.ShiguangFullscreen?.configure({onError:message=>toast(message,'error')});
   window.ShiguangSettings?.configure({getState:()=>state,api,modalFrame,showModal,renderModal,closeModal,toast,icon});
   window.ShiguangVideoExport?.configure({getState:()=>state,api,modalFrame,showModal,renderModal,closeModal,toast,icon});
-  const navs = [ ['collections','folder','作品集'], ['photos','grid','全部照片'], ['timeline','clock','时间轴'], ['places','pin','拍摄地点'], ['journal','book','旅行手记'], ['favorites','heart','我的收藏'] ];
+  window.ShiguangColors?.configure({getState:()=>state,api,icon,redraw:()=>{if(state.view==='colors'&&!state.scope)updateCollection();},openPhoto,openPhotos:openColorPhotos});
+  const navs = [ ['collections','folder','作品集'], ['photos','grid','全部照片'], ['timeline','clock','时间轴'], ['colors','palette','色彩足迹'], ['places','pin','拍摄地点'], ['journal','book','旅行手记'], ['favorites','heart','我的收藏'] ];
+  function openColorPhotos({title,photoIds}) {
+    state.scope={type:'color',title,photoIds:[...photoIds]};
+    state.view='colors';state.search='';state.layout='grid';clearSelection();render();
+  }
   const collectionRecord = id => state.collections.find(item => item.id === id);
   const currentCollection = () => state.scope?.type === 'collection' ? collectionRecord(state.scope.key) : null;
   const supportedPhoto = file => /\.(jpe?g|png|webp|gif|bmp|tiff?)$/i.test(file.name);
@@ -149,6 +155,7 @@
     try {
       const [photos, journals, collections] = await Promise.all([api('/api/photos'), api('/api/journals'), api('/api/collections')]);
       state.photos = photos.photos;
+      window.ShiguangColors?.invalidate();
       state.storageBytes = photos.storage_bytes || 0;
       state.journals = journals.journals;
       state.deletedJournalKeys = new Set(journals.deleted_journal_keys || []);
@@ -172,6 +179,7 @@
     if (state.scope?.type === 'place') photos = photos.filter(photo => photoCity(photo) === state.scope.key && (!state.scope.country || photoCountry(photo)===state.scope.country));
     if (state.scope?.type === 'country') photos = photos.filter(photo => photoCountry(photo) === state.scope.key);
     if (state.scope?.type === 'journal') photos = photos.filter(photo => journalKey(photo) === state.scope.key);
+    if (state.scope?.type === 'color') {const ids=new Set(state.scope.photoIds);photos=photos.filter(photo=>ids.has(photo.id));}
     if (state.scope?.type === 'collection') {
       const members = new Set(currentCollection()?.photo_ids || []);
       photos = photos.filter(photo => members.has(photo.id));
@@ -195,7 +203,7 @@
     return `<section class="collection-intro" aria-label="作品集概览"><div class="intro-copy"><div class="intro-eyebrow">PHOTOGRAPHIC JOURNAL / 01</div><h1>我的摄影作品集</h1><div class="intro-stats"><span><strong>${state.collections.length}</strong> 份作品集</span><span><strong>${state.photos.length}</strong> 张摄影作品</span></div></div><figure class="intro-art"><img class="intro-classic-art" src="/assets/european-sketch.png" alt="欧式街角的简约手绘插画" draggable="false"><img class="intro-italian-art" src="/assets/italian-oil-vignette.png" alt="托斯卡纳农舍与橄榄枝的油画小景" draggable="false"></figure></section>`;
   }
   function renderPageHeading(heading, description, actions) {
-    const labels = {photos:'COLLECTED PHOTOGRAPHS',timeline:'CHRONOLOGICAL INDEX',places:'A GEOGRAPHY OF MOMENTS',journal:'FIELD NOTES',favorites:'SELECTED MOMENTS'};
+    const labels = {photos:'COLLECTED PHOTOGRAPHS',timeline:'CHRONOLOGICAL INDEX',colors:'A CHROMATIC JOURNAL',places:'A GEOGRAPHY OF MOMENTS',journal:'FIELD NOTES',favorites:'SELECTED MOMENTS'};
     const eyebrow = currentCollection() ? 'PHOTOGRAPHIC PORTFOLIO' : state.scope?.type === 'journal' ? 'FIELD NOTES' : labels[state.view] || 'PRIVATE PHOTOGRAPHIC ARCHIVE';
     return `<div class="page-heading"><div><div class="eyebrow">${eyebrow}</div><h1>${esc(heading)}</h1>${description ? `<p class="heading-description collection-description">${esc(description)}</p>` : ''}</div>${actions}</div>`;
   }
@@ -206,21 +214,22 @@
     const collection = currentCollection();
     const collectionList = state.view === 'collections' && !state.scope;
     const placesPage = state.view === 'places' && !state.scope;
+    const colorsPage = state.view === 'colors' && !state.scope;
     const photoView = !collectionList && (state.scope || ['photos','timeline','favorites'].includes(state.view));
     const isTimeline = state.view === 'timeline' || state.layout === 'timeline';
     if (isTimeline && !state.sort.startsWith('date-')) state.sort = 'date-desc';
     const activeNav = navs.find(item => item[0] === state.view) || navs[0];
-    const headings = {collections:'我的摄影作品集',photos:'全部照片',timeline:'按时间翻阅',places:'拍摄地点',journal:'旅行手记',favorites:'收藏的片刻'};
-    const descriptions = {collections:'按旅行、地点或主题，整理自己的摄影作品。',photos:'按时间、地点与作品集，整理自己的摄影作品。',timeline:'以拍摄时间为序，翻阅过去的影像。',places:'从地点，重访照片里的片刻。',journal:'记下照片以外的见闻。',favorites:'留作反复观看的照片。'};
+    const headings = {collections:'我的摄影作品集',photos:'全部照片',timeline:'按时间翻阅',colors:'色彩足迹',places:'拍摄地点',journal:'旅行手记',favorites:'收藏的片刻'};
+    const descriptions = {collections:'按旅行、地点或主题，整理自己的摄影作品。',photos:'按时间、地点与作品集，整理自己的摄影作品。',timeline:'以拍摄时间为序，翻阅过去的影像。',colors:'沿着时间，翻阅镜头里的颜色。',places:'从地点，重访照片里的片刻。',journal:'记下照片以外的见闻。',favorites:'留作反复观看的照片。'};
     const heading = collection?.title || state.scope?.title || headings[state.view];
     const description = placesPage ? '' : collection ? (collection.description || '') : state.scope?.type === 'place' ? '同一处风景，每一次相遇都有不同。' : state.scope?.type === 'journal' ? '一些沿途的光影，和想要留下的话。' : descriptions[state.view];
     const headingActions = collection ? `<div class="heading-actions"><button class="button secondary" data-action="video-open" data-id="${esc(collection.id)}" ${collection.photo_ids.length?'':'disabled'}>${icon('video')} 导出视频</button><button class="button secondary" data-action="edit-collection" data-id="${esc(collection.id)}">${icon('edit')} 编辑作品集</button><button class="button secondary" data-action="add-existing" data-id="${esc(collection.id)}">${icon('grid')} 从已有照片添加</button><button class="button primary" data-action="import">${icon('upload')} 批量导入</button></div>` : state.scope?.type === 'journal' ? `<div class="heading-actions"><button class="button secondary" data-action="edit-journal">${icon('edit')} 写旅行手记</button><button class="icon-button journal-delete-detail" data-action="delete-journal" data-key="${esc(state.scope.key)}" title="删除旅途记忆" aria-label="删除${esc(state.scope.title)}">${icon('trash')}</button></div>` : '';
-    const scopeIcon = collection ? 'folder' : ['place','country'].includes(state.scope?.type) ? 'pin' : 'book';
-    const backText = collection ? '返回作品集' : ['place','country'].includes(state.scope?.type) ? '返回拍摄地点' : '返回旅行手记';
+    const scopeIcon = collection ? 'folder' : state.scope?.type==='color' ? 'palette' : ['place','country'].includes(state.scope?.type) ? 'pin' : 'book';
+    const backText = collection ? '返回作品集' : state.scope?.type==='color' ? '返回色彩足迹' : ['place','country'].includes(state.scope?.type) ? '返回拍摄地点' : '返回旅行手记';
     const stats = state.scope ? `<button class="inline-link" data-action="clear-scope">${icon('left')} ${backText}</button>${collection ? `<div class="collection-detail-header"><div class="collection-cover-small">${collection.cover_url ? `<img src="${esc(collection.cover_url)}" alt="作品集封面">` : `<div class="collection-placeholder">${icon('folder')}</div>`}</div><div><div class="collection-meta"><span>${icon('photo')} ${collection.photo_ids.length} 张照片</span>${collection.place ? `<span>${icon('pin')} ${esc(collection.place)}</span>` : ''}</div></div></div>` : `<div class="filter-chip">${icon(scopeIcon)}<span>${esc(state.scope.title)}</span><button data-action="clear-scope" aria-label="${backText}">${icon('close')}</button></div>`}` : `<div class="stats-row"><div class="stat"><span class="stat-value">${state.collections.length}</span><span class="stat-label">份作品集</span></div><div class="stat"><span class="stat-value">${state.photos.length}</span><span class="stat-label">张摄影作品</span></div><div class="stat"><span class="stat-value">${new Set(state.photos.map(photoCity).filter(Boolean)).size}</span><span class="stat-label">个拍摄地点</span></div></div>`;
     const layoutTabs = photoView ? `<div class="view-tabs" aria-label="照片布局"><button class="view-tab ${!isTimeline ? 'active' : ''}" data-action="layout-grid">${icon('grid')} 照片画廊</button><button class="view-tab ${isTimeline ? 'active' : ''}" data-action="layout-timeline">${icon('clock')} 时间线</button><button class="view-tab ${state.selectionMode ? 'active' : ''}" data-action="toggle-selection">${icon('check')} ${state.selectionMode ? '退出批量管理' : '批量管理'}</button></div>` : collectionList ? '' : `<span class="section-label">${state.view === 'places' ? '以足迹，串起回忆' : '一段旅程，一页故事'}</span>`;
     const sortOptions = collectionList ? [['date-desc','最近更新'],['date-asc','创建时间 · 由早及晚'],['name','作品集名称']] : [['date-desc','拍摄时间 · 由近及远'],['date-asc','拍摄时间 · 由远及近'],['import-desc','最近导入'],['name','作品名称']];
-    app.innerHTML = `<div class="app-shell ${collectionList ? 'collection-home' : ''}"><aside class="sidebar"><a class="brand brand-icon-only" href="#" data-action="home" aria-label="相册首页" title="相册首页"><span class="brand-mark">${brandMark()}</span></a><nav class="nav-list" aria-label="相册导航">${navs.map(([key, svg, label])=>`<button class="nav-item ${state.view === key ? 'active' : ''}" data-action="nav" data-view="${key}" ${state.view === key ? 'aria-current="page"' : ''}>${icon(svg)}<span>${label}</span>${['collections','photos','favorites'].includes(key) ? `<span class="nav-count">${key === 'collections' ? state.collections.length : key === 'photos' ? state.photos.length : state.photos.filter(photo=>photo.favorite).length}</span>` : ''}</button>`).join('')}</nav><div class="sidebar-bottom"><button class="inline-link" data-action="about">使用说明 ${icon('right')}</button></div></aside><main class="main-area"><header class="topbar"><div class="breadcrumb">我的相册 <span>/</span> ${collection ? '<button class="inline-link" data-action="collections-home">作品集</button> <span>/</span> ' : ''}<strong>${esc(state.scope?.title || activeNav[2])}</strong></div><div class="topbar-right">${window.ShiguangMusic?.renderButton() || ''}${window.ShiguangFullscreen?.renderButton() || ''}<button class="icon-button settings-button" data-action="settings-open" aria-label="设置" title="设置">${icon('settings')}</button><button class="icon-button about-button" data-action="about" aria-label="使用说明">${icon('info')}</button><button class="button secondary" data-action="create-collection">${icon('folder')} 创建作品集</button><button class="button primary" data-action="import">${icon('plus')} 导入照片</button></div></header><div class="page-content">${collectionList ? renderCollectionIntro() : renderPageHeading(heading,description,headingActions)}${collectionList || placesPage ? '' : stats}${state.scope?.type === 'journal' ? renderJournalNote() : ''}${placesPage ? '' : renderToolbar(layoutTabs,collectionList,isTimeline,sortOptions)}<div id="collection" aria-live="polite">${renderCollection()}</div></div></main></div><div class="global-drop-overlay" id="global-drop"><div class="global-drop-content">${icon('upload')}<h2>把沿途的风景，放进来。</h2><p>可一次拖入多张照片，松开鼠标开始整理</p></div></div>`;
+    app.innerHTML = `<div class="app-shell ${collectionList ? 'collection-home' : ''}"><aside class="sidebar"><a class="brand brand-icon-only" href="#" data-action="home" aria-label="相册首页" title="相册首页"><span class="brand-mark">${brandMark()}</span></a><nav class="nav-list" aria-label="相册导航">${navs.map(([key, svg, label])=>`<button class="nav-item ${state.view === key ? 'active' : ''}" data-action="nav" data-view="${key}" ${state.view === key ? 'aria-current="page"' : ''}>${icon(svg)}<span>${label}</span>${['collections','photos','favorites'].includes(key) ? `<span class="nav-count">${key === 'collections' ? state.collections.length : key === 'photos' ? state.photos.length : state.photos.filter(photo=>photo.favorite).length}</span>` : ''}</button>`).join('')}</nav><div class="sidebar-bottom"><button class="inline-link" data-action="about">使用说明 ${icon('right')}</button></div></aside><main class="main-area"><header class="topbar"><div class="breadcrumb">我的相册 <span>/</span> ${collection ? '<button class="inline-link" data-action="collections-home">作品集</button> <span>/</span> ' : ''}<strong>${esc(state.scope?.title || activeNav[2])}</strong></div><div class="topbar-right">${window.ShiguangMusic?.renderButton() || ''}${window.ShiguangFullscreen?.renderButton() || ''}<button class="icon-button settings-button" data-action="settings-open" aria-label="设置" title="设置">${icon('settings')}</button><button class="icon-button about-button" data-action="about" aria-label="使用说明">${icon('info')}</button><button class="button secondary" data-action="create-collection">${icon('folder')} 创建作品集</button><button class="button primary" data-action="import">${icon('plus')} 导入照片</button></div></header><div class="page-content">${collectionList ? renderCollectionIntro() : renderPageHeading(heading,description,headingActions)}${collectionList || placesPage || colorsPage ? '' : stats}${state.scope?.type === 'journal' ? renderJournalNote() : ''}${placesPage || colorsPage ? '' : renderToolbar(layoutTabs,collectionList,isTimeline,sortOptions)}<div id="collection" aria-live="polite">${renderCollection()}</div></div></main></div><div class="global-drop-overlay" id="global-drop"><div class="global-drop-content">${icon('upload')}<h2>把沿途的风景，放进来。</h2><p>可一次拖入多张照片，松开鼠标开始整理</p></div></div>`;
   }
   function renderCollectionList() {
     const query = state.search.trim().toLocaleLowerCase();
@@ -243,6 +252,7 @@
     if (state.loading) return `<div class="loading-state"><span class="spinner"></span><p>正在打开你的影像空间…</p></div>`;
     if (state.error) return `<div class="empty-small">${icon('info')}<h2>暂时无法打开相册</h2><p>${esc(state.error)}</p><button class="button secondary" data-action="retry">重新连接</button><p class="muted">请关闭应用后重新打开，或点击重新连接。</p></div>`;
     if (state.view === 'collections' && !state.scope) return renderCollectionList();
+    if (state.view === 'colors' && !state.scope) {void window.ShiguangColors?.ensureLoaded();return window.ShiguangColors?.render() || '';}
     if (state.view === 'places') return renderPlaces(filteredPhotos());
     const photos = filteredPhotos();
     if (currentCollection() && !photos.length) return `${renderSelectionToolbar()}<section class="empty-small collection-empty">${icon(state.search ? 'search' : 'folder')}<h2>${state.search ? '这里还没有匹配的照片' : '作品集已经建好，放进第一组照片吧。'}</h2><p>${state.search ? '试试其他关键词，或清空搜索查看全部照片。' : '可以一次选择多张照片，也可以把整个旅行文件夹导入。'}</p><div class="empty-actions">${state.search ? '<button class="button secondary" data-action="clear-search">清空搜索</button>' : `<button class="button primary" data-action="import">${icon('upload')} 批量导入照片</button><button class="button secondary" data-action="add-existing" data-id="${esc(currentCollection().id)}">从已有照片添加</button>`}</div><p class="batch-hint">同一张照片可以加入多个作品集，不会重复保存原图。</p></section>`;
@@ -526,6 +536,7 @@
     const updated = result.photo || result;
     const index = state.photos.findIndex(photo=>photo.id===id);
     if (index >= 0) state.photos[index] = updated;
+    window.ShiguangColors?.invalidate();
     return updated;
   }
   async function favorite(id) {
@@ -640,6 +651,7 @@
   }
   async function action(name, target) {
     const id = target.dataset.id;
+    if (name.startsWith('color-') && window.ShiguangColors) {await window.ShiguangColors.handleClick(target);return;}
     if (name.startsWith('settings-') && window.ShiguangSettings) {await window.ShiguangSettings.handleAction(name,target);return;}
     if (name.startsWith('video-') && window.ShiguangVideoExport) {await window.ShiguangVideoExport.handleAction(name,target);return;}
     if (name === 'fullscreen-toggle' && window.ShiguangFullscreen) {await window.ShiguangFullscreen.handleToggle();return;}
@@ -725,7 +737,7 @@
       const key=target.dataset.key;
       state.scope={type:'journal',key,title:journalTitle(key,state.photos.filter(photo=>journalKey(photo)===key))};
       state.view='photos'; state.search=''; state.layout='grid'; clearSelection();render();
-    } else if (name === 'clear-scope') {state.view=state.scope.type === 'collection' ? 'collections' : ['place','country'].includes(state.scope.type) ? 'places' : 'journal'; state.scope=null; state.search='';state.layout='grid';clearSelection(); render();}
+    } else if (name === 'clear-scope') {state.view=state.scope.type === 'collection' ? 'collections' : state.scope.type==='color' ? 'colors' : ['place','country'].includes(state.scope.type) ? 'places' : 'journal'; state.scope=null; state.search='';state.layout='grid';clearSelection(); render();}
     else if (name === 'edit-journal') showModal('journal-edit', {key:state.scope.key});
     else if (name === 'save-journal') await saveJournal();
     else if (name === 'delete-journal') {
@@ -749,6 +761,7 @@
     if (event.target.id === 'existing-search' && state.modal?.type==='existing-photos') {state.modal.query=event.target.value;updateExistingPicker();}
   });
   document.addEventListener('change', event => {
+    if (event.target.dataset.colorField || event.target.id?.startsWith('color-') || event.target.dataset.action?.startsWith('color-')) {Promise.resolve(window.ShiguangColors?.handleChange(event.target)).catch(error=>toast(error.message,'error'));}
     if (event.target.id === 'photo-files') setFiles(event.target.files);
     if (event.target.id === 'photo-folder') setFiles(event.target.files,true);
     if (event.target.id === 'photo-sort') {state.sort=event.target.value;updateCollection();}

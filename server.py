@@ -24,6 +24,7 @@ import uuid
 import zipfile
 
 from video_jobs import VideoJobError, VideoJobManager
+from color_analysis import ColorAnalysis, ColorAnalysisError
 
 try:
     from PIL import Image, ImageOps, UnidentifiedImageError
@@ -1125,6 +1126,7 @@ class AlbumHTTPServer(ThreadingHTTPServer):
         self.web_dir = Path(web_dir).resolve()
         self.application_file = Path(application_file) if application_file is not None else (Path(sys.executable) if getattr(sys, "frozen", False) else ROOT / "拾光相册.exe")
         self.store = AlbumStore(data_dir, self.web_dir)
+        self.colors = ColorAnalysis(self.store)
         self.video_jobs = VideoJobManager(self.store, self.web_dir / "assets")
         super().__init__(("127.0.0.1", port), AlbumHandler)
 
@@ -1133,7 +1135,11 @@ class AlbumHTTPServer(ThreadingHTTPServer):
             if hasattr(self, "video_jobs"):
                 self.video_jobs.close()
         finally:
-            super().server_close()
+            try:
+                if hasattr(self, "colors"):
+                    self.colors.close()
+            finally:
+                super().server_close()
 
 
 class AlbumHandler(BaseHTTPRequestHandler):
@@ -1177,7 +1183,7 @@ class AlbumHandler(BaseHTTPRequestHandler):
             video_create = re.fullmatch(r"/api/collections/([a-f0-9]{32})/video", path)
             video_preview = re.fullmatch(r"/api/collections/([a-f0-9]{32})/video-preview", path)
             video_job = re.fullmatch(r"/api/video-jobs/([a-f0-9]{32})(/file)?", path)
-            self.security_check(require_same_origin=path == "/api/backup" or any(item is not None for item in (framed, video_create, video_preview, video_job)))
+            self.security_check(require_same_origin=path in {"/api/backup", "/api/colors"} or any(item is not None for item in (framed, video_create, video_preview, video_job)))
             query = parse_qs(target.query, keep_blank_values=True)
             store = self.server.store
             if self.command in {"GET", "HEAD"}:
@@ -1185,6 +1191,10 @@ class AlbumHandler(BaseHTTPRequestHandler):
                     self.send_json(200, {"app": "shiguang", "project_dir": str(ROOT), "data_dir": str(store.root), "pid": os.getpid()})
                 elif path == "/api/photos":
                     self.send_json(200, store.photos())
+                elif path == "/api/colors":
+                    if set(query) - {"period", "scope"} or ("period" in query and query["period"] not in (["month"], ["quarter"], ["year"])) or ("scope" in query and query["scope"] not in (["all"], ["favorites"])):
+                        raise ApiError(400, "请选择有效的色彩分析时期与作品范围。")
+                    self.send_json(200, self.server.colors.analyze(period=query.get("period", ["month"])[0], scope=query.get("scope", ["all"])[0]))
                 elif path == "/api/journals":
                     self.send_json(200, store.journals())
                 elif path == "/api/collections":
@@ -1276,7 +1286,7 @@ class AlbumHandler(BaseHTTPRequestHandler):
                 self.send_json(200, store.delete_journal(path[len("/api/journals/"):]))
             else:
                 raise ApiError(405, "不支持这个操作。")
-        except (ApiError, VideoJobError) as error:
+        except (ApiError, VideoJobError, ColorAnalysisError) as error:
             self.close_connection = True
             self.send_json(error.status, {"error": error.message})
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
