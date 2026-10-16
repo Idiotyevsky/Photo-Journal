@@ -38,7 +38,7 @@
   window.ShiguangAtlas?.configure({getState:()=>state,api,modalFrame,showModal,renderModal,closeModal,toast,icon,redraw:()=>{if(state.view==='places'&&!state.scope)updateCollection();},openPlace:openPlaceScope,openCountry:code=>{code=String(code||'').toUpperCase();state.scope={type:'country',key:code,title:countryName(code)||'待补充国家'};state.view='photos';state.search='';state.layout='grid';clearSelection();render();}});
   window.ShiguangMusic?.configure({onError:message=>toast(message,'error')});
   window.ShiguangFullscreen?.configure({onError:message=>toast(message,'error')});
-  window.ShiguangPhotoMenu?.configure({currentPhoto:()=>state.modal?.type==='lightbox'?state.photos.find(photo=>photo.id===state.lightboxId):null,icon,toast});
+  window.ShiguangPhotoMenu?.configure({currentPhoto:()=>state.modal?.type==='lightbox'?state.photos.find(photo=>photo.id===document.getElementById('lightbox-image')?.dataset.photoId):null,icon,toast});
   window.ShiguangSettings?.configure({getState:()=>state,api,modalFrame,showModal,renderModal,closeModal,toast,icon});
   window.ShiguangVideoExport?.configure({getState:()=>state,api,modalFrame,showModal,renderModal,closeModal,toast,icon});
   window.ShiguangColors?.configure({getState:()=>state,api,icon,redraw:()=>{if(state.view==='colors'&&!state.scope)updateCollection();},openPhoto,openPhotos:openColorPhotos});
@@ -422,22 +422,83 @@
     const errors = results.filter(item=>item.status==='error').length;
     return `<div class="import-progress"><div class="import-status"><span>${state.importing ? `正在批量整理 ${Math.min(results.length + 1,state.files.length)} / ${state.files.length} 张` : '本批照片整理完成'}</span><strong>${Math.round(state.importProgress)}%</strong></div><div class="progress-track"><div class="progress-fill" style="width:${state.importProgress}%"></div></div><p>${added} 张新照片${duplicates ? ` · ${duplicates} 张已有照片${state.modal?.collectionId ? '已关联到作品集' : '无需重复保存'}` : ''}${errors ? ` · ${errors} 张未导入` : ''}</p></div>${errors ? `<div class="import-results">${results.filter(item=>item.status==='error').map(item=>`<div class="result-item error">${icon('info')}<span><strong>${esc(item.name)}</strong><br>${esc(item.error)}</span></div>`).join('')}</div>` : ''}`;
   }
+  const lightboxImages=new Map();
+  let lightboxVersion=0;
+  function prepareLightboxImage(photo) {
+    const key=JSON.stringify([imageUrl(photo),photo.thumbnail_url]);
+    if(lightboxImages.has(key))return lightboxImages.get(key);
+    const pending=(async()=>{
+      for(const url of new Set([imageUrl(photo),photo.thumbnail_url].filter(Boolean))){
+        const image=new Image();image.decoding='async';
+        try{
+          await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=reject;image.src=url;});
+          if(image.decode)await image.decode();
+          if(image.naturalWidth)return image;
+        }catch(_error){/* Try the local preview if the original cannot be decoded. */}
+      }
+      throw new Error('这张照片暂时无法显示，请重试。');
+    })();
+    lightboxImages.set(key,pending);
+    // Keep only a small decoded neighbourhood, even in a very large album.
+    while(lightboxImages.size>3)lightboxImages.delete(lightboxImages.keys().next().value);
+    pending.catch(()=>{if(lightboxImages.get(key)===pending)lightboxImages.delete(key);});
+    return pending;
+  }
+  function preloadLightboxNeighbours(photos,index) {
+    if(photos.length<2||index<0)return;
+    for(const offset of [-1,1])void prepareLightboxImage(photos[(index+offset+photos.length)%photos.length]).catch(()=>{});
+  }
   function renderLightbox() {
     window.ShiguangPhotoMenu?.close(false);
     const photo = state.photos.find(item=>item.id===state.lightboxId);
     if (!photo) {closeModal(); return;}
     const photos = filteredPhotos();
     const index = photos.findIndex(item=>item.id===photo.id);
-    modalRoot.innerHTML = `<div class="lightbox-backdrop"><section class="lightbox" role="dialog" aria-modal="true" aria-label="${esc(photo.title || photo.filename)}"><header class="lightbox-topbar"><span class="lightbox-title">${icon('photo')} ${esc(photo.title || photo.filename)}</span><div class="lightbox-actions"><button class="button export-photo-button" data-action="export-photo" data-id="${esc(photo.id)}">${icon('download')} 导出作品</button><button class="icon-button ${photo.favorite ? 'active' : ''}" data-action="favorite" data-id="${esc(photo.id)}" aria-label="${photo.favorite ? '取消收藏' : '收藏'}" aria-pressed="${Boolean(photo.favorite)}">${icon('heart')}</button><a class="icon-button" href="${esc(photo.url)}" download="${esc(photo.filename)}" aria-label="下载原图">${icon('download')}</a><button class="icon-button" data-action="close-modal" aria-label="关闭照片">${icon('close')}</button></div></header><div class="lightbox-body"><div class="lightbox-stage"><img id="lightbox-image" tabindex="0" src="${esc(imageUrl(photo))}" data-fallback="${esc(photo.thumbnail_url)}" alt="${esc(photo.title || photo.filename)}">${photos.length > 1 ? `<button class="lightbox-nav prev" data-action="previous-photo" aria-label="上一张">${icon('left')}</button><button class="lightbox-nav next" data-action="next-photo" aria-label="下一张">${icon('right')}</button>` : ''}<span class="lightbox-counter">${index >= 0 ? index + 1 : 1} / ${photos.length || 1}</span></div><aside class="photo-details"><div class="detail-section"><span class="eyebrow">THE MOMENT</span><h2>${esc(photo.title || photo.filename)}</h2><span class="location-badge">${icon('pin')}${esc(photoLocation(photo))}</span>${photo.caption ? `<p class="caption-text">${esc(photo.caption)}</p>` : ''}</div><div class="detail-section"><h3>拍摄信息</h3><dl><div class="detail-row"><dt>拍摄时间</dt><dd>${dateText(photo.taken_at)}<br>${esc((photo.taken_at || '').slice(11,19))}</dd></div>${photo.date_source === 'file' ? '<div class="date-source-note">时间来自文件修改时间，可在编辑中校正。</div>' : ''}${photo.trip ? `<div class="detail-row"><dt>所属旅程</dt><dd>${esc(photo.trip)}</dd></div>` : ''}${photo.camera ? `<div class="detail-row"><dt>相机</dt><dd>${esc(photo.camera)}</dd></div>` : ''}${photo.lens ? `<div class="detail-row"><dt>镜头</dt><dd>${esc(photo.lens)}</dd></div>` : ''}<div class="detail-row"><dt>尺寸</dt><dd>${photo.width || '—'} × ${photo.height || '—'}</dd></div><div class="detail-row"><dt>文件大小</dt><dd>${sizeText(photo.size || 0)}</dd></div>${photo.lat != null && photo.lon != null ? `<div class="detail-row"><dt>拍摄坐标</dt><dd>${Number(photo.lat).toFixed(5)}, ${Number(photo.lon).toFixed(5)}</dd></div>` : ''}<div class="detail-row"><dt>文件名称</dt><dd>${esc(photo.filename)}</dd></div></dl></div><div class="detail-actions"><button class="button secondary" data-action="edit-photo" data-id="${esc(photo.id)}">${icon('edit')} 编辑照片信息</button><button class="button ghost remove-photo" data-action="delete-photo" data-id="${esc(photo.id)}">${icon('trash')} 从相册移除</button></div></aside></div></section></div>`;
+    const current=state.modal,version=++lightboxVersion,existing=modalRoot.querySelector('.lightbox');
+    const target=existing?document.createElement('div'):modalRoot;
+    target.innerHTML = `<div class="lightbox-backdrop"><section class="lightbox" role="dialog" aria-modal="true" aria-label="${esc(photo.title || photo.filename)}"><header class="lightbox-topbar"><span class="lightbox-title">${icon('photo')} ${esc(photo.title || photo.filename)}</span><div class="lightbox-actions"><button class="button export-photo-button" data-action="export-photo" data-id="${esc(photo.id)}">${icon('download')} 导出作品</button><button class="icon-button ${photo.favorite ? 'active' : ''}" data-action="favorite" data-id="${esc(photo.id)}" aria-label="${photo.favorite ? '取消收藏' : '收藏'}" aria-pressed="${Boolean(photo.favorite)}">${icon('heart')}</button><a class="icon-button" href="${esc(photo.url)}" download="${esc(photo.filename)}" aria-label="下载原图">${icon('download')}</a><button class="icon-button" data-action="close-modal" aria-label="关闭照片">${icon('close')}</button></div></header><div class="lightbox-body"><div class="lightbox-stage"><img id="lightbox-image" tabindex="0" src="${esc(imageUrl(photo))}" data-fallback="${esc(photo.thumbnail_url)}" alt="${esc(photo.title || photo.filename)}"><button class="lightbox-nav prev" ${photos.length>1?'':'hidden'} data-action="previous-photo" aria-label="上一张">${icon('left')}</button><button class="lightbox-nav next" ${photos.length>1?'':'hidden'} data-action="next-photo" aria-label="下一张">${icon('right')}</button><span class="lightbox-counter">${index >= 0 ? index + 1 : 1} / ${photos.length || 1}</span></div><aside class="photo-details"><div class="detail-section"><span class="eyebrow">THE MOMENT</span><h2>${esc(photo.title || photo.filename)}</h2><span class="location-badge">${icon('pin')}${esc(photoLocation(photo))}</span>${photo.caption ? `<p class="caption-text">${esc(photo.caption)}</p>` : ''}</div><div class="detail-section"><h3>拍摄信息</h3><dl><div class="detail-row"><dt>拍摄时间</dt><dd>${dateText(photo.taken_at)}<br>${esc((photo.taken_at || '').slice(11,19))}</dd></div>${photo.date_source === 'file' ? '<div class="date-source-note">时间来自文件修改时间，可在编辑中校正。</div>' : ''}${photo.trip ? `<div class="detail-row"><dt>所属旅程</dt><dd>${esc(photo.trip)}</dd></div>` : ''}${photo.camera ? `<div class="detail-row"><dt>相机</dt><dd>${esc(photo.camera)}</dd></div>` : ''}${photo.lens ? `<div class="detail-row"><dt>镜头</dt><dd>${esc(photo.lens)}</dd></div>` : ''}<div class="detail-row"><dt>尺寸</dt><dd>${photo.width || '—'} × ${photo.height || '—'}</dd></div><div class="detail-row"><dt>文件大小</dt><dd>${sizeText(photo.size || 0)}</dd></div>${photo.lat != null && photo.lon != null ? `<div class="detail-row"><dt>拍摄坐标</dt><dd>${Number(photo.lat).toFixed(5)}, ${Number(photo.lon).toFixed(5)}</dd></div>` : ''}<div class="detail-row"><dt>文件名称</dt><dd>${esc(photo.filename)}</dd></div></dl></div><div class="detail-actions"><button class="button secondary" data-action="edit-photo" data-id="${esc(photo.id)}">${icon('edit')} 编辑照片信息</button><button class="button ghost remove-photo" data-action="delete-photo" data-id="${esc(photo.id)}">${icon('trash')} 从相册移除</button></div></aside></div></section></div>`;
     const exposure = [['光圈',photo.aperture],['快门',photo.shutter],['ISO',photo.iso],['焦距',photo.focal_length],['曝光补偿',photo.exposure_bias]];
     const rows = exposure.filter(([,value])=>value).map(([label,value])=>`<div class="detail-row"><dt>${label}</dt><dd>${esc(value)}</dd></div>`).join('');
-    const dimensions = [...modalRoot.querySelectorAll('.detail-row')].find(row=>row.querySelector('dt')?.textContent==='尺寸');
+    const dimensions = [...target.querySelectorAll('.detail-row')].find(row=>row.querySelector('dt')?.textContent==='尺寸');
     if (dimensions) dimensions.insertAdjacentHTML('beforebegin',rows);
     const collection = currentCollection();
-    const actions = modalRoot.querySelector('.detail-actions');
+    const actions = target.querySelector('.detail-actions');
     if (actions) actions.insertAdjacentHTML('afterbegin', `${collection ? `<button class="button secondary" data-action="set-collection-cover" data-id="${esc(photo.id)}">${icon('photo')} ${collection.cover_photo_id === photo.id ? '已是作品集封面' : '设为作品集封面'}</button>` : ''}<button class="button secondary" data-action="assign-photo" data-id="${esc(photo.id)}">${icon('folder')} 添加到作品集</button>`);
     const memberships = state.collections.filter(item=>item.photo_ids.includes(photo.id));
-    if (memberships.length) modalRoot.querySelector('.photo-details .detail-section')?.insertAdjacentHTML('beforeend', `<p class="batch-hint">所在作品集：${esc(memberships.map(item=>item.title).join('、'))}</p>`);
+    if (memberships.length) target.querySelector('.photo-details .detail-section')?.insertAdjacentHTML('beforeend', `<p class="batch-hint">所在作品集：${esc(memberships.map(item=>item.title).join('、'))}</p>`);
+    const image=target.querySelector('#lightbox-image');image.dataset.photoId=photo.id;
+    if(!existing){
+      preloadLightboxNeighbours(photos,index);
+      return;
+    }
+    const stage=existing.querySelector('.lightbox-stage'),oldImage=existing.querySelector('#lightbox-image');
+    const isCurrent=()=>state.modal===current&&state.modal?.type==='lightbox'&&state.lightboxId===photo.id&&version===lightboxVersion&&existing.isConnected;
+    const commit=ready=>{
+      if(!isCurrent())return;
+      if(ready){
+        ready.id='lightbox-image';ready.tabIndex=0;ready.alt=photo.title||photo.filename;ready.dataset.photoId=photo.id;
+        const focused=document.activeElement===oldImage;oldImage.replaceWith(ready);if(focused)ready.focus({preventScroll:true});
+      }
+      existing.setAttribute('aria-label',photo.title||photo.filename);
+      existing.querySelector('.lightbox-title').innerHTML=target.querySelector('.lightbox-title').innerHTML;
+      for(const action of ['export-photo','favorite']){
+        const button=existing.querySelector(`[data-action="${action}"]`),next=target.querySelector(`[data-action="${action}"]`);
+        button.dataset.id=photo.id;button.className=next.className;
+        if(action==='favorite'){button.setAttribute('aria-label',next.getAttribute('aria-label'));button.setAttribute('aria-pressed',next.getAttribute('aria-pressed'));}
+      }
+      const download=existing.querySelector('[download]');download.href=photo.url;download.download=photo.filename;
+      existing.querySelectorAll('.lightbox-nav').forEach(button=>{button.hidden=photos.length<2;});
+      existing.querySelector('.lightbox-counter').textContent=target.querySelector('.lightbox-counter').textContent;
+      const details=existing.querySelector('.photo-details'),nextDetails=target.querySelector('.photo-details');
+      if(details.innerHTML!==nextDetails.innerHTML){details.innerHTML=nextDetails.innerHTML;details.scrollTop=0;}
+      stage.setAttribute('aria-busy','false');preloadLightboxNeighbours(photos,index);
+    };
+    if(oldImage.dataset.photoId===photo.id){commit(null);return;}
+    stage.setAttribute('aria-busy','true');
+    void prepareLightboxImage(photo).then(commit).catch(error=>{
+      if(!isCurrent())return;
+      stage.setAttribute('aria-busy','false');state.lightboxId=oldImage.dataset.photoId;toast(error.message,'error');
+    });
   }
   function openPhoto(id) { state.lightboxId = id; showModal('lightbox'); }
   function openPhotoExport(id) {

@@ -20,7 +20,21 @@ vm.runInNewContext(fs.readFileSync('ui/photo-menu.js','utf8'),{window,document,c
 const api=window.ShiguangPhotoMenu;api.configure({currentPhoto:()=>current,icon:()=>'<svg></svg>',toast:(...args)=>errors.push(args)});
 const emit=(type,extra={})=>{const event={target:image,clientX:990,clientY:710,preventDefault(){this.prevented=true;},stopImmediatePropagation(){this.stopped=true;},...extra};for(const callback of events[type]||[])callback(event);return event;};
 const flush=async()=>{for(let i=0;i<8;i++)await Promise.resolve();};
+async function testDecodedPhotoLoading(){
+  const source=fs.readFileSync('ui/app.js','utf8'),images=[];
+  class Image{constructor(){images.push(this);this.naturalWidth=100;this.decode=()=>new Promise(resolve=>this.finishDecode=resolve);}}
+  const loader={};vm.runInNewContext(source.slice(source.indexOf('  const lightboxImages='),source.indexOf('  function renderLightbox()'))+'\nloader.prepare=prepareLightboxImage;loader.cache=lightboxImages;',{Image,loader,imageUrl:photo=>photo.url});
+  const photo={url:'/original/a.jpg',thumbnail_url:'/preview/a.jpg'},pending=loader.prepare(photo);
+  assert.equal(loader.prepare(photo),pending,'adjacent preloads share one image request');
+  let ready=false;pending.then(()=>ready=true);images[0].onload();await flush();assert.equal(ready,false,'loading alone cannot replace the visible photo before decode');
+  images[0].finishDecode();await pending;assert.equal(ready,true);
+  const fallback=loader.prepare({url:'/broken.jpg',thumbnail_url:'/preview.jpg'});images.at(-1).onerror();await flush();assert.equal(images.at(-1).src,'/preview.jpg');images.at(-1).onload();await flush();images.at(-1).finishDecode();assert.equal((await fallback).src,'/preview.jpg');
+  const broken={url:'/missing.jpg',thumbnail_url:'/missing-preview.jpg'},failure=loader.prepare(broken);images.at(-1).onerror();await flush();images.at(-1).onerror();await assert.rejects(failure,/暂时无法显示/);const retry=loader.prepare(broken);assert.notEqual(retry,failure,'failed requests are retryable');images.at(-1).onerror();await flush();images.at(-1).onerror();await assert.rejects(retry);
+  for(let i=0;i<8;i++){const item=loader.prepare({url:`/${i}.jpg`});images.at(-1).onload();await flush();images.at(-1).finishDecode();await item;}
+  assert(loader.cache.size<=3,'decoded image memory stays bounded');
+}
 (async()=>{
+  await testDecodedPhotoLoading();
   const unrelated=emit('contextmenu',{target:new Element('other')});assert(!unrelated.prevented);assert.equal(dialog.children.length,0);
   assert(emit('contextmenu').prevented);let menu=dialog.children[0];assert.equal(menu.attrs.role,'menu');assert.equal(menu.style.left,'762px');assert.equal(menu.style.top,'664px');assert.equal(focused,menu.children[0]);assert(menu.children[0].innerHTML.includes('在文件管理器中显示'));
   const escape=emit('keydown',{target:focused,key:'Escape'});assert(escape.prevented&&escape.stopped,'Escape closes only the menu, not the viewer');assert.equal(dialog.children.length,0);assert.equal(focused,image);

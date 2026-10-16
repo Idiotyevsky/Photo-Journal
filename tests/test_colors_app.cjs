@@ -16,6 +16,7 @@ async function setup(){
   const colors={configure(value){calls.configure++;host=value;},ensureLoaded(){calls.ensure++;return Promise.resolve();},render(){calls.render++;return `<section class="colors-panel" data-render="${calls.render}">色彩分析内容</section>`;},invalidate(){calls.invalidate++;},async handleClick(target){calls.click.push(target);},async handleChange(target){calls.change.push(target);}};
   function element(id=''){
     return {id,innerHTML:'',inert:false,isConnected:true,disabled:false,dataset:{},classList:{add(){},remove(){}},setAttribute(){},append(){},remove(){this.isConnected=false;},focus(){document.activeElement=this;},getClientRects:()=>[{}],contains:()=>false,insertAdjacentHTML(_where,html){this.innerHTML+=html;},querySelector(selector){
+      if(selector==='#lightbox-image')return element('lightbox-image');
       const action=selector.match(/data-action="([^"]+)"/)?.[1];if(action&&this.innerHTML.includes(`data-action="${action}"`))return element();return null;
     },querySelectorAll:()=>[]};
   }

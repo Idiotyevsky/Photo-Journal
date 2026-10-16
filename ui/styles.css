@@ -420,6 +420,7 @@ h1, h2, h3, p { margin: 0; }
 .lightbox-nav:hover { color: #dbe6ed; background: #405360; border-color: #839ba9; }
 .lightbox-nav.prev { left: 13px; }
 .lightbox-nav.next { right: 13px; }
+.lightbox-nav[hidden] { display: none; }
 .lightbox-nav .icon { width: 19px; height: 19px; }
 .lightbox-counter { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); color: #98a9b1; font-family: var(--roman); font-size: 13px; letter-spacing: .1em; }
 .photo-details { flex: 0 0 285px; width: 285px; padding: 29px 24px; overflow-y: auto; overscroll-behavior: contain; border-left: 1px solid #46535b; background: #2d3941; }
