@@ -443,7 +443,8 @@ class AlbumDownloadDialogTests(unittest.TestCase):
 
     def test_other_exports_and_other_origins_keep_the_existing_handler(self):
         handler, args, dialog, forms, browser = self.setup_dialog()
-        for uri in (self.origin + "/api/backup", self.origin + "/api/export", self.origin + "/api/photos/" + "b" * 32 + "/framed?preview=1",
+        for uri in (self.origin + "/api/backup?path=other", self.origin + "/api/export?unknown=1", self.origin + "/api/photos/" + "b" * 32 + "/framed?preview=1",
+                    'https://outside.example/api/backup',self.origin+'/api/backup#fragment',self.origin.replace(':54321',':54322')+'/api/export',
                     self.origin+'/media/previews/'+'b'*32+'.jpg', self.origin+'/media/originals/'+'b'*32+'.jpg?path=other',
                     'https://outside.example/media/originals/'+'b'*32+'.png', self.origin+'/api/photos/'+'b'*32+'/framed?unknown=1',
                     "https://outside.example/api/video-jobs/" + "a" * 32 + "/file?download=1",
@@ -454,6 +455,34 @@ class AlbumDownloadDialogTests(unittest.TestCase):
                 handler.on_download_starting("sender", args)
                 browser.on_download_starting.assert_called_with("sender", args)
         forms.SaveFileDialog.assert_not_called()
+
+    def test_migration_and_metadata_exports_have_correct_default_save_types(self):
+        for route,extension,title,filter_text in (('/api/backup','zip','保存完整迁移包','ZIP 压缩包 (*.zip)|*.zip'),('/api/export','json','保存相册文字资料','JSON 资料 (*.json)|*.json')):
+            with self.subTest(route=route):
+                handler,args,dialog,_forms,browser=self.setup_dialog(suggestion=r'C:\Downloads\相册备份')
+                args.DownloadOperation.Uri=self.origin+route
+                names=[]
+                def show(_owner):
+                    names.append(dialog.FileName)
+                    dialog.FileName=str(self.destination/('迁移资料.'+dialog.DefaultExt))
+                    return 'ok'
+                dialog.ShowDialog.side_effect=show
+                handler.on_download_starting(None,args)
+                self.assertEqual(dialog.Title,title);self.assertEqual(dialog.Filter,filter_text)
+                self.assertEqual(dialog.DefaultExt,extension);self.assertEqual(dialog.FilterIndex,1)
+                self.assertEqual(names,['相册备份.'+extension]);self.assertTrue(dialog.AddExtension)
+                self.assertEqual(args.ResultFilePath,str(self.destination/('迁移资料.'+extension)))
+                self.assertFalse(args.Cancel);self.assertTrue(dialog.OverwritePrompt)
+                browser.on_download_starting.assert_not_called()
+                self.assertFalse(list(self.destination.iterdir()))
+
+    def test_migration_save_cancel_does_not_change_destination(self):
+        handler,args,dialog,_forms,browser=self.setup_dialog(accepted=False,suggestion=r'C:\Downloads\相册迁移包.ZIP')
+        args.DownloadOperation.Uri=self.origin+'/api/backup'
+        before=args.ResultFilePath;handler.on_download_starting(None,args)
+        self.assertTrue(args.Cancel);self.assertEqual(args.ResultFilePath,before)
+        self.assertEqual(dialog.DefaultExt,'zip');dialog.Dispose.assert_called_once()
+        browser.on_download_starting.assert_not_called()
 
     def test_downloads_disabled_or_dialog_failure_cancel_safely(self):
         handler, args, dialog, forms, browser = self.setup_dialog()

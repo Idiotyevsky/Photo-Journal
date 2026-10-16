@@ -47,6 +47,10 @@ class AlbumDownloadDialog:
             target = urlsplit(str(uri))
             if (target.scheme, target.netloc) != (self.origin.scheme, self.origin.netloc) or target.fragment:
                 return None
+            if target.path == '/api/backup' and not target.query:
+                return ('zip', 'ZIP 压缩包 (*.zip)|*.zip', ('.zip',), '保存完整迁移包', '拾光相册完整迁移包')
+            if target.path == '/api/export' and not target.query:
+                return ('json', 'JSON 资料 (*.json)|*.json', ('.json',), '保存相册文字资料', '相册资料')
             if re.fullmatch(r'/api/photos/[a-f0-9]{32}/framed', target.path) and target.query in ('', 'preview=0'):
                 extension, title, default = 'jpg', '保存白边作品', '照片-白边'
             else:
@@ -103,7 +107,7 @@ class AlbumDownloadDialog:
 
 def install_downloads(window, origin):
     # pywebview 6.2.1's generic download dialog hardcodes *.*. Replace only
-    # this window's handler, on its GUI thread, for photos and videos.
+    # this window's handler, on its GUI thread, for all album export formats.
     from System import Action
     from webview import settings
     from webview.platforms.edgechromium import WinForms
