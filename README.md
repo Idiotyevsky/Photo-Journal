@@ -145,20 +145,15 @@
 
 打包后的拾光相册.exe 输出在项目根目录。
 
-验证：
+测试集中在 `tests/` 中，包含桌面操作、数据保存与迁移、照片与视频导出、色彩分析及界面交互。桌面文件定位和视频保存窗口的测试已合并到 `test_desktop.py`，地图路线与矢量缩放的测试已合并到 `test_atlas.cjs`。
 
-    python -m unittest -v test_desktop test_desktop_files test_desktop_downloads test_server test_collection_order test_photo_export test_video_api test_video_export test_color_analysis test_colors_api
-    node --check ui/app.js
-    node test_atlas.cjs
-    node test_atlas_vector.cjs
-    node test_journals.cjs
-    node test_fullscreen.cjs
-    node test_music.cjs
-    node test_video_export.cjs
-    node test_colors.cjs
-    node test_colors_app.cjs
-    node test_collection_order.cjs
-    node test_photo_menu.cjs
+在项目根目录验证 Python 功能：
+
+    python -m unittest discover -s tests -t . -v
+
+在项目根目录用 PowerShell 验证界面功能（需要 Node.js）：
+
+    Get-ChildItem tests -Filter '*.cjs' | ForEach-Object { node $_.FullName; if ($LASTEXITCODE -ne 0) { throw "界面测试失败：$($_.Name)" } }
 
 测试使用临时目录，不修改个人照片。
 

@@ -14,7 +14,7 @@ class PhotoExportTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.path = self.root / "source.jpg"
-        self.assets = Path(__file__).resolve().parent / "ui" / "assets"
+        self.assets = Path(__file__).resolve().parents[1] / "ui" / "assets"
         self.metadata = {"camera": "Panasonic DC-S5", "lens": "LUMIX S 20-60/F3.5-5.6", "focal_length": "50 mm", "aperture": "f/5.3", "shutter": "1/60 s", "iso": "6400"}
 
     def tearDown(self):

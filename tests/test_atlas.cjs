@@ -90,8 +90,35 @@ async function setup(){
   return {atlas,state,document,root,mount,emit,resize,observers,window,async action(name,props={}){await atlas.handleAction(name,{dataset:props});}};
 }
 
+async function testCountryRoutesAndPersistence(){
+const source=fs.readFileSync('ui/atlas-art.js','utf8')+'\n'+fs.readFileSync('ui/atlas.js','utf8');
+async function setup(stored={stops:[],updated_at:null}){
+ const events={},state={modal:null},posts=[],maps=[],zoomControls=[];
+ const document={addEventListener:(name,fn)=>(events[name]??=[]).push(fn),getElementById:()=>null,querySelector:()=>null,querySelectorAll:selector=>selector==='svg.atlas-svg'?maps:selector==='[data-atlas-zoom-controls]'?zoomControls:[]};
+ const window={innerWidth:1188};
+ vm.runInNewContext(source,{window,document,console,setTimeout:fn=>fn(),crypto:require('node:crypto').webcrypto});
+ const atlas=window.ShiguangAtlas;
+ atlas.configure({getState:()=>state,redraw:()=>{},api:async(path,options)=>{if(path==='/api/atlas'){if(options){const data=JSON.parse(options.body);posts.push(data);return {...data,updated_at:'2026-10-15'};}return stored;}return JSON.parse(fs.readFileSync('ui'+path,'utf8'));},showModal:(type,props)=>state.modal={type,...props},renderModal:()=>{},modalFrame:(_title,_desc,body)=>body,closeModal:()=>state.modal=null,toast:()=>{},icon:()=>'',openPlace:()=>{},openCountry:()=>{}});
+ await atlas.loadCountries();return {atlas,events,state,posts,maps,zoomControls};
+}
+ const s=await setup();
+ const photos=[{id:'a',place:'扬州',taken_at:'2025-01-01',country:'CN'},{id:'b',place:'北京',taken_at:'2025-01-02',country:'CN'},{id:'c',place:'巴黎',taken_at:'2025-01-03',country:'FR'},{id:'d',place:'伦敦',taken_at:'2025-01-04',country:'GB'}];
+ const pins=html=>(html.match(/class="atlas-pin /g)||[]).length,lines=html=>(html.match(/class="atlas-route-line"/g)||[]).length;
+ let html=s.atlas.render(photos);assert.equal(pins(html),2);assert.equal(lines(html),1);assert.ok(html.includes('class="atlas-province"'));assert.ok(!html.includes('<image'));assert.equal(s.atlas.countryForPlace('扬州'),'CN');assert.equal(s.atlas.countryForPlace('巴黎'),'FR');
+ await s.atlas.handleAction('atlas-view',{dataset:{scope:'world'}});html=s.atlas.render(photos);assert.equal(pins(html),3);assert.equal(lines(html),2);assert.ok(html.includes('data-atlas-id="country_CN"'));assert.ok(html.includes('世界 · 国家足迹'));
+ await s.atlas.handleAction('atlas-select',{dataset:{atlasId:'country_CN'}});html=s.atlas.render(photos);assert.ok(html.includes('2 座城市'));assert.ok(html.includes('扬州 · 北京'));assert.ok(html.includes('atlas-open-country'));
+ await s.atlas.handleAction('atlas-edit',{dataset:{}});html=s.atlas.renderModal(s.state.modal);assert.ok(html.includes('>国家</label>'));assert.ok(html.includes('>城市 '));assert.equal(s.state.modal.draft[0].country,'CN');assert.equal(s.state.modal.draft[0].city,'扬州');
+ const stop=s.state.modal.draft[0];s.events.input[0]({target:{dataset:{atlasField:'city',atlasId:stop.id},value:'北京'}});assert.equal(stop.name,'北京');assert.ok(stop.lat>39&&stop.lat<41);
+ s.events.input[0]({target:{dataset:{atlasField:'country',atlasId:stop.id},value:'FR'}});assert.equal(stop.city,'');assert.equal(stop.name,'法国');assert.equal(stop.lat,s.atlas.countries().find(c=>c.code==='FR').lat);
+ await s.atlas.handleAction('atlas-save',{dataset:{}});assert.equal(s.posts[0].stops[0].country,'FR');assert.equal(s.posts[0].stops[0].city,'');
+ const r=await setup({stops:[{id:'1',name:'扬州',lat:32.39,lon:119.43,country:'',city:''}],updated_at:'saved'});r.atlas.render(photos);await r.atlas.handleAction('atlas-edit',{dataset:{}});assert.equal(r.state.modal.draft[0].city,'扬州');assert.equal(r.state.modal.draft[0].country,'CN');
+ const empty=await setup({stops:[],updated_at:'saved'});empty.atlas.render(photos);await empty.atlas.handleAction('atlas-view',{dataset:{scope:'world'}});html=empty.atlas.render(photos);assert.equal(pins(html),3);assert.equal(lines(html),0);
+ const countryOnly=await setup();await countryOnly.atlas.handleAction('atlas-view',{dataset:{scope:'world'}});html=countryOnly.atlas.render([{id:'country-cn',country:'CN'},{id:'country-fr',country:'FR'}]);assert.equal(pins(html),2,'photos with a country but no city/GPS must remain separate countries');
+}
+
 // Assertions follow the public Atlas contract, with the real artwork loaded above.
 (async()=>{
+  await testCountryRoutesAndPersistence();
   const context=await setup();assert.equal(typeof context.atlas.refreshLayout,'function','public layout hook is available');
   const photos=[{id:'a',place:'扬州',country:'CN',taken_at:'2025-01-01'},{id:'b',place:'北京',country:'CN',taken_at:'2025-02-01'},{id:'c',place:'巴黎',country:'FR',taken_at:'2025-03-01'},{id:'d',place:'伦敦',country:'GB',taken_at:'2025-04-01'}];
   const initial=context.atlas.render(photos),selectedId=initial.match(/data-atlas-id="([^"]+)"/)[1];
@@ -100,6 +127,7 @@ async function setup(){
   assert(!/<image\b|\.png\b|\.jpe?g\b|data:image/i.test(markup),'geographic base contains no raster image or raster reference');
   assert(markup.includes('class="atlas-country"'));assert(markup.includes('class="atlas-province"'));
   const main=context.mount(markup,800);context.atlas.refreshLayout();context.resize();
+  const beforeScroll=main.getAttribute('viewBox');assert.equal(context.emit('wheel',main,{ctrlKey:false,deltaY:-100}).defaultPrevented,undefined,'ordinary wheel keeps page scrolling');assert.equal(main.getAttribute('viewBox'),beforeScroll);
   const countries=main.querySelectorAll('.atlas-country'),provinces=main.querySelectorAll('.atlas-province');assert(countries.length>3);assert(provinces.length>30,'real province geometry is present');
   for(const path of [...countries,...provinces]){assert(path.getAttribute('d').startsWith('M'));assert.equal(path.getAttribute('fill-rule'),'evenodd');assert.equal(path.getAttribute('vector-effect'),'non-scaling-stroke');}
   const lines=main.querySelectorAll('.atlas-route-line'),underlays=main.querySelectorAll('.atlas-route-line-underlay');assert(lines.length);assert.equal(lines.length,underlays.length);
@@ -168,5 +196,5 @@ async function setup(){
   const position=editor.createSVGPoint(),m=editor.getScreenCTM();position.x=target.x*m.a+m.e;position.y=target.y*m.d+m.f;
   context.emit('pointerdown',editor,{clientX:position.x,clientY:position.y});context.emit('pointerup',editor,{clientX:position.x,clientY:position.y});context.emit('click',editor,{clientX:position.x,clientY:position.y});near(stop.lat,32.39722,'picking after vector resize latitude');near(stop.lon,119.43583,'picking after vector resize longitude');assert.equal(modal.picking,false);
   await context.action('atlas-view',{scope:'world'});const worldMarkup=context.atlas.render(photos);assert(!/<image\b|\.png\b/i.test(worldMarkup));const world=context.mount(worldMarkup,700);context.resize();assert(world.querySelectorAll('.atlas-country').length>150,'world uses actual country outlines');assert.equal(world.querySelectorAll('.atlas-province').length,0);arrowSizes(world);
-  console.log('PASS: real vector art and countries/provinces; no raster base; non-scaling routes and borders; fixed CSS pin/hit/focus/label/arrow sizes at 1x/4x and narrow/wide resize; selected-pin button anchoring and pointer-wheel priority; independent main/editor CTMs; visible labels bounded; preserved SVG/pin identity, focus, selection, picking and drag capture; accurate post-resize picking.');
+  console.log('PASS: country/city route editing, grouping and persistence; real vector art and countries/provinces; no raster base; non-scaling routes and borders; fixed CSS pin/hit/focus/label/arrow sizes at 1x/4x and narrow/wide resize; selected-pin button anchoring and pointer-wheel priority; independent main/editor CTMs; visible labels bounded; preserved SVG/pin identity, focus, selection, picking and drag capture; accurate post-resize picking.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

@@ -1,19 +1,26 @@
-"""Desktop lifecycle checks use fake windows and disposable album directories."""
+"""Desktop lifecycle, file location and save dialogs use disposable fixtures."""
 
 import json
 import ctypes
 import os
+from io import BytesIO
 from pathlib import Path
 import sys
 import tempfile
 import threading
 import time
 import types
+from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
 import desktop
 import server
+from PIL import Image
+from desktop import DesktopBridge
+from desktop_files import reveal_in_explorer
+from desktop_downloads import VideoDownloadDialog, install_video_downloads
+from server import AlbumStore
 
 
 class FakeEvent:
@@ -295,6 +302,202 @@ class DesktopTests(unittest.TestCase):
             self.assertIsInstance(kwargs["js_api"], desktop.FullscreenBridge)
             self.assertIsInstance(kwargs["js_api"], desktop.DesktopBridge)
             self.assertIs(kwargs["js_api"]._store, service.store)
+
+
+class VideoDownloadDialogTests(unittest.TestCase):
+    origin = "http://127.0.0.1:54321"
+    url = origin + "/api/video-jobs/" + "a" * 32 + "/file?download=1"
+
+    def setup_dialog(self, accepted=True, suggestion="C:\\Downloads\\北京-幻灯片.mp4"):
+        dialog = SimpleNamespace(Dispose=Mock())
+        def show(owner):
+            self.assertIs(owner, browser.form)
+            # Simulate the native default-extension behavior when a user
+            # replaces the suggestion with a name that has no extension.
+            dialog.FileName = str(self.destination / ("我的影片." + dialog.DefaultExt))
+            return "ok" if accepted else "cancel"
+        dialog.ShowDialog = Mock(side_effect=show)
+        forms = SimpleNamespace(SaveFileDialog=Mock(return_value=dialog), DialogResult=SimpleNamespace(OK="ok"))
+        browser = SimpleNamespace(form=object(), on_download_starting=Mock())
+        handler = VideoDownloadDialog(browser, self.origin, forms, {"ALLOW_DOWNLOADS": True})
+        args = SimpleNamespace(DownloadOperation=SimpleNamespace(Uri=self.url), ResultFilePath=suggestion, Cancel=False)
+        return handler, args, dialog, forms, browser
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.destination = Path(self.temporary.name)
+
+    def test_default_filter_extension_and_selected_destination_are_mp4(self):
+        handler, args, dialog, forms, browser = self.setup_dialog()
+        handler.on_download_starting(object(), args)
+        self.assertEqual(dialog.Title, "保存作品集视频")
+        self.assertEqual(dialog.Filter, "MP4 视频 (*.mp4)|*.mp4")
+        self.assertEqual(dialog.FilterIndex, 1)
+        self.assertEqual(dialog.DefaultExt, "mp4")
+        self.assertTrue(dialog.AddExtension)
+        self.assertTrue(dialog.OverwritePrompt)
+        self.assertTrue(dialog.CheckPathExists)
+        self.assertTrue(dialog.RestoreDirectory)
+        self.assertEqual(args.ResultFilePath, str(self.destination / "我的影片.mp4"))
+        self.assertFalse(args.Cancel)
+        dialog.Dispose.assert_called_once()
+        browser.on_download_starting.assert_not_called()
+        self.assertFalse(list(self.destination.iterdir()), "the dialog only selects a destination; WebView2 owns the download")
+
+    def test_unicode_suggestion_missing_suffix_and_windows_basename(self):
+        for suggestion, expected in [(r"C:\Downloads\北京-幻灯片.mp4", "北京-幻灯片.mp4"),
+                                     (r"C:\Downloads\我的旅行", "我的旅行.mp4"),
+                                     ("旅行.MP4", "旅行.MP4"), ("file", "作品集-幻灯片.mp4"),
+                                     ("", "作品集-幻灯片.mp4")]:
+            with self.subTest(suggestion=suggestion):
+                self.assertEqual(VideoDownloadDialog.filename(suggestion), expected)
+        handler, args, dialog, forms, browser = self.setup_dialog(suggestion=str(self.destination / "旅行.mp4"))
+        handler.on_download_starting(object(), args)
+        self.assertEqual(dialog.InitialDirectory, str(self.destination))
+
+    def test_cancel_does_not_change_path_or_create_any_file(self):
+        handler, args, dialog, forms, browser = self.setup_dialog(accepted=False)
+        before = args.ResultFilePath
+        handler.on_download_starting(object(), args)
+        self.assertTrue(args.Cancel)
+        self.assertEqual(args.ResultFilePath, before)
+        dialog.Dispose.assert_called_once()
+
+    def test_other_exports_and_other_origins_keep_the_existing_handler(self):
+        handler, args, dialog, forms, browser = self.setup_dialog()
+        for uri in (self.origin + "/api/backup", self.origin + "/api/export", self.origin + "/api/photos/" + "b" * 32 + "/framed",
+                    "https://outside.example/api/video-jobs/" + "a" * 32 + "/file?download=1",
+                    self.url.replace(":54321", ":54322"), self.url + "&path=C:/private", self.url + "#fragment",
+                    self.url.replace("a" * 32, "../private")):
+            with self.subTest(uri=uri):
+                args.DownloadOperation.Uri = uri
+                handler.on_download_starting("sender", args)
+                browser.on_download_starting.assert_called_with("sender", args)
+        forms.SaveFileDialog.assert_not_called()
+
+    def test_downloads_disabled_or_dialog_failure_cancel_safely(self):
+        handler, args, dialog, forms, browser = self.setup_dialog()
+        handler.settings["ALLOW_DOWNLOADS"] = False
+        handler.on_download_starting(None, args)
+        self.assertTrue(args.Cancel)
+        forms.SaveFileDialog.assert_not_called()
+        handler.settings["ALLOW_DOWNLOADS"] = True
+        args.Cancel = False
+        dialog.ShowDialog.side_effect = RuntimeError("dialog unavailable")
+        with self.assertRaises(RuntimeError):
+            handler.on_download_starting(None, args)
+        self.assertTrue(args.Cancel)
+        dialog.Dispose.assert_called_once()
+
+    def test_adapter_replaces_only_one_windows_event_and_runs_on_gui_thread(self):
+        class Event:
+            def __init__(self, callbacks): self.callbacks = callbacks
+            def __iadd__(self, value): self.callbacks.append(value); return self
+            def __isub__(self, value): self.callbacks.remove(value); return self
+        fallback = Mock()
+        core = SimpleNamespace(DownloadStarting=Event([fallback]))
+        browser = SimpleNamespace(on_download_starting=fallback, webview=SimpleNamespace(CoreWebView2=core))
+        window = SimpleNamespace(native=SimpleNamespace(browser=browser, Invoke=Mock(side_effect=lambda action: action())))
+        fake_forms = object()
+        import sys
+        with patch.dict(sys.modules, {"System": SimpleNamespace(Action=lambda function: function),
+                                     "webview": SimpleNamespace(settings={"ALLOW_DOWNLOADS": True}),
+                                     "webview.platforms.edgechromium": SimpleNamespace(WinForms=fake_forms)}):
+            handler = install_video_downloads(window, self.origin)
+        window.native.Invoke.assert_called_once()
+        self.assertEqual(core.DownloadStarting.callbacks, [handler.on_download_starting])
+        self.assertIs(handler.fallback, fallback)
+
+
+class DesktopPhotoLocationTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name) / '相册 旅途,照片'
+        self.store = AlbumStore(self.root)
+        output = BytesIO()
+        Image.new('RGB', (80, 60), 'navy').save(output, 'JPEG')
+        self.photo = self.store.import_photo(output.getvalue(), '海边.jpg', None)['photo']
+        self.original = self.store.originals / (self.photo['id'] + '.jpg')
+        self.bridge = DesktopBridge(self.store)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    @patch('desktop_files.reveal_in_explorer')
+    def test_only_database_owned_original_is_revealed_and_data_is_unchanged(self, reveal):
+        before = self.store.photos()
+        data = self.original.read_bytes()
+        self.assertEqual(self.bridge.reveal_photo(self.photo['id']), {'ok': True})
+        reveal.assert_called_once_with(self.original.resolve())
+        self.assertEqual(self.store.photos(), before)
+        self.assertEqual(self.original.read_bytes(), data)
+
+    @patch('desktop_files.reveal_in_explorer')
+    def test_paths_unknown_ids_and_corrupt_extensions_are_rejected(self, reveal):
+        for value in (None, [], {}, str(self.original), '../original.jpg', '0' * 32):
+            self.assertFalse(self.bridge.reveal_photo(value)['ok'])
+        with self.store.connect() as db:
+            db.execute('UPDATE photos SET extension=? WHERE id=?', ('/../../outside.jpg', self.photo['id']))
+        self.assertFalse(self.bridge.reveal_photo(self.photo['id'])['ok'])
+        reveal.assert_not_called()
+
+    @patch('desktop_files.reveal_in_explorer')
+    def test_missing_removed_linked_photos_and_closed_album_are_rejected(self, reveal):
+        with patch.object(Path, 'is_symlink', return_value=True):
+            self.assertFalse(self.bridge.reveal_photo(self.photo['id'])['ok'])
+        self.original.unlink()
+        self.assertFalse(self.bridge.reveal_photo(self.photo['id'])['ok'])
+        with self.store.connect() as db:
+            db.execute('DELETE FROM photos WHERE id=?', (self.photo['id'],))
+        self.assertFalse(self.bridge.reveal_photo(self.photo['id'])['ok'])
+        self.bridge._on_closed()
+        self.assertFalse(self.bridge.reveal_photo(self.photo['id'])['ok'])
+        reveal.assert_not_called()
+
+    @patch('desktop_files.reveal_in_explorer', side_effect=OSError('shell failure'))
+    def test_native_failure_becomes_a_readable_error(self, reveal):
+        result = self.bridge.reveal_photo(self.photo['id'])
+        self.assertFalse(result['ok'])
+        self.assertIn('文件管理器', result['error'])
+        self.assertNotIn(str(self.root), result['error'])
+
+
+class WindowsShellTests(unittest.TestCase):
+    def shell(self, initialized=0, parse=0, opened=0):
+        shell, ole = Mock(), Mock()
+        ole.CoInitializeEx.return_value = initialized
+        def parse_path(_path, _context, out, _attributes, _requested):
+            if parse >= 0:
+                ctypes.cast(out, ctypes.POINTER(ctypes.c_void_p))[0] = 0x123456789
+            return parse
+        shell.SHParseDisplayName.side_effect = parse_path
+        shell.SHOpenFolderAndSelectItems.return_value = opened
+        return shell, ole
+
+    def test_unicode_path_selects_exact_file_and_frees_pidl_and_com(self):
+        shell, ole = self.shell()
+        path = Path('D:/相册 旅途,照片/原图.jpg')
+        with patch('desktop_files.os.name', 'nt'), patch('desktop_files.ctypes.WinDLL', side_effect=[shell, ole], create=True):
+            reveal_in_explorer(path)
+        self.assertEqual(shell.SHParseDisplayName.call_args.args[0], str(path))
+        pointer, count, children, flags = shell.SHOpenFolderAndSelectItems.call_args.args
+        self.assertEqual((pointer.value, count, children, flags), (0x123456789, 0, None, 0))
+        ole.CoTaskMemFree.assert_called_once_with(pointer)
+        ole.CoUninitialize.assert_called_once()
+
+    def test_parse_or_open_failures_release_only_owned_resources(self):
+        for initialized, parse, opened, frees, uninitializes in (
+                (0, -1, 0, 0, 1), (1, 0, -1, 1, 1),
+                (-2147417850, 0, -1, 1, 0), (-1, 0, 0, 0, 0)):
+            with self.subTest(initialized=initialized, parse=parse, opened=opened):
+                shell, ole = self.shell(initialized, parse, opened)
+                path = Path('D:/照片.jpg')
+                with patch('desktop_files.os.name', 'nt'), patch('desktop_files.ctypes.WinDLL', side_effect=[shell, ole], create=True):
+                    with self.assertRaises(OSError):
+                        reveal_in_explorer(path)
+                self.assertEqual(ole.CoTaskMemFree.call_count, frees)
+                self.assertEqual(ole.CoUninitialize.call_count, uninitializes)
 
 
 if __name__ == "__main__":

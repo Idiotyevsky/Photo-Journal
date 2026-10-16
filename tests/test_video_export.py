@@ -22,7 +22,7 @@ class VideoExportTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
-        self.assets = Path(__file__).resolve().parent / 'ui' / 'assets'
+        self.assets = Path(__file__).resolve().parents[1] / 'ui' / 'assets'
         self.first, self.second = self.root / 'landscape.jpg', self.root / 'portrait.jpg'
         Image.new('RGB', (1200, 800), (181, 90, 69)).save(self.first, quality=98)
         Image.new('RGB', (800, 1200), (53, 95, 138)).save(self.second, quality=98)
