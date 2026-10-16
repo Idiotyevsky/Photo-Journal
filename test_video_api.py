@@ -151,7 +151,7 @@ class VideoAPITests(unittest.TestCase):
         self.assertEqual([photo["id"] for _path, photo in call["slides"]], [self.second["id"], self.first["id"]])
         self.assertEqual(call["photo_bytes"], [self.second_bytes, self.first_bytes])
         self.assertEqual(call["music_bytes"], self.audio)
-        self.assertEqual(call["options"], {"resolution": "1080p", "seconds_per_photo": 5, "order": "collection", "music_id": self.track["id"], "volume": 0.5})
+        self.assertEqual(call["options"], {"resolution": "4k", "seconds_per_photo": 5, "order": "collection", "music_id": self.track["id"], "volume": 0.5})
         self.assertEqual(call["assets"], self.web / "assets")
         directory = call["output"].parent
         self.assertFalse((directory / "sources").exists())
@@ -175,6 +175,17 @@ class VideoAPITests(unittest.TestCase):
         self.assertEqual(self.request("GET", finished["video_url"] + "?download=2")[0], 400)
         self.assertEqual(self.service.store.photos(), before)
         self.assertEqual(originals, {path.name: hashlib.sha256(path.read_bytes()).digest() for path in self.service.store.originals.iterdir()})
+
+    def test_all_resolutions_reach_encoder_and_keep_download_format(self):
+        for resolution in ('4k', '1440p', '1080p', '720p'):
+            with self.subTest(resolution=resolution):
+                job = self.start(resolution=resolution)
+                finished = self.wait_job(job['id'])
+                self.assertEqual(self.calls[-1]['options']['resolution'], resolution)
+                status, headers, _body = self.request('HEAD', finished['download_url'])
+                self.assertEqual(status, 200)
+                self.assertEqual(headers['Content-Type'], 'video/mp4')
+                self.assertTrue(headers['Content-Disposition'].endswith('.mp4'))
 
     def test_preview_selects_actual_first_photo_without_creating_job(self):
         status, headers, body = self.request("GET", self.preview_path)
@@ -211,7 +222,7 @@ class VideoAPITests(unittest.TestCase):
         self.assertEqual(self.request("POST", "/api/collections/" + "0" * 32 + "/video", {})[0], 404)
 
     def test_invalid_options_empty_collections_and_imported_music_rules(self):
-        invalid = [{"resolution": "4k"}, {"resolution": []}, {"seconds_per_photo": True}, {"seconds_per_photo": 5.0}, {"seconds_per_photo": 2}, {"order": "filename"}, {"music_id": "hymn"}, {"music_id": "../music"}, {"music_id": "0" * 32}, {"volume": True}, {"volume": -0.1}, {"volume": 1.1}, {"volume": float("nan")}, {"volume": float("inf")}, {"volume": "0.5"}, {"output_path": "C:/private.mp4"}]
+        invalid = [{"resolution": "8k"}, {"resolution": []}, {"seconds_per_photo": True}, {"seconds_per_photo": 5.0}, {"seconds_per_photo": 2}, {"order": "filename"}, {"music_id": "hymn"}, {"music_id": "../music"}, {"music_id": "0" * 32}, {"volume": True}, {"volume": -0.1}, {"volume": 1.1}, {"volume": float("nan")}, {"volume": float("inf")}, {"volume": "0.5"}, {"output_path": "C:/private.mp4"}]
         for options in invalid:
             with self.subTest(options=options):
                 self.assertEqual(self.request("POST", self.start_path, options)[0], 400)

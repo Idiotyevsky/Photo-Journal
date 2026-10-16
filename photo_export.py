@@ -172,7 +172,8 @@ def _draw_border(canvas: Image.Image, photo: dict, assets_dir: Path, image_heigh
     _draw_text(draw, lens_text, lens_font, width - pad, y, SECONDARY, right=True)
 
 
-def render_framed_photo(original_path: Path, photo_dict: dict, assets_dir: Path, preview: bool = False) -> bytes:
+def render_framed_photo(original_path: Path, photo_dict: dict, assets_dir: Path, preview: bool = False,
+                        *, max_width: int | None = None) -> bytes:
     """Export the first, correctly oriented frame; never modify the source file."""
     with Image.open(original_path) as source:
         source.seek(0)
@@ -181,8 +182,9 @@ def render_framed_photo(original_path: Path, photo_dict: dict, assets_dir: Path,
         profile = source.info.get("icc_profile")
         upright = ImageOps.exif_transpose(source)
         # Preview and final composition use the same width-relative geometry.
-        if preview and upright.width > PREVIEW_WIDTH:
-            upright = upright.resize((PREVIEW_WIDTH, max(1, round(upright.height * PREVIEW_WIDTH / upright.width))), Image.Resampling.LANCZOS)
+        limit = max_width if max_width is not None else (PREVIEW_WIDTH if preview else None)
+        if limit is not None and upright.width > limit:
+            upright = upright.resize((limit, max(1, round(upright.height * limit / upright.width))), Image.Resampling.LANCZOS)
         photo = _to_srgb(upright, profile)
     width, height = photo.size
     border_height = framed_border_height(width)

@@ -45,7 +45,12 @@ function setup({count=3,tracks=[{id:TRACK,title:'<自己的音乐>',origin:'impo
 }
 (async()=>{
   const context=setup();await context.open();
-  assert.equal(context.state.modal.photoCount,3);assert.equal(context.state.modal.options.resolution,'1080p');assert.equal(context.state.modal.options.volume,.5);
+  assert.equal(context.state.modal.photoCount,3);assert.equal(context.state.modal.options.resolution,'4k');assert.equal(context.state.modal.options.volume,.5);
+  for(const resolution of ['4k','1440p','1080p','720p']){
+    assert(context.elements.get('video-export-fields').innerHTML.includes(`value="${resolution}"`));
+    context.change('video-resolution',resolution);assert.equal(context.state.modal.options.resolution,resolution);
+  }
+  context.change('video-resolution','unsupported');assert.equal(context.state.modal.options.resolution,'4k');
   assert.equal(context.state.modal.options.order,'collection');assert(context.html.includes('按作品集编排'));assert(context.elements.get('video-export-still').src.endsWith('order=collection'));
   assert.equal(context.state.modal.tracks.length,1,'only imported music is offered, including disabled tracks');
   assert(context.html.includes('旅行 &lt;作品&gt;'));assert(context.elements.get('video-export-fields').innerHTML.includes('&lt;自己的音乐&gt;'));
@@ -61,7 +66,7 @@ function setup({count=3,tracks=[{id:TRACK,title:'<自己的音乐>',origin:'impo
   context.change('video-music','');assert(context.players[0].paused&&context.players[0].removed,'changing music stops and releases old preview audio');
   context.change('video-music',TRACK);await context.action('video-listen');const playing=context.players.at(-1);
   await context.action('video-create');assert(playing.paused&&playing.removed);assert.equal(context.state.modal.job.status,'preparing');assert.equal(context.timers.size,1);
-  const post=context.calls.find(call=>call.options.method==='POST');assert.equal(post.path,`/api/collections/${COLLECTION}/video`);assert.deepEqual(JSON.parse(post.options.body),{resolution:'1080p',seconds_per_photo:8,order:'newest',music_id:TRACK,volume:.2});
+  const post=context.calls.find(call=>call.options.method==='POST');assert.equal(post.path,`/api/collections/${COLLECTION}/video`);assert.deepEqual(JSON.parse(post.options.body),{resolution:'4k',seconds_per_photo:8,order:'newest',music_id:TRACK,volume:.2});
   const renders=context.renders;await context.tick();assert.equal(context.state.modal.job.progress,40);assert.equal(context.renders,renders,'poll progress does not regenerate the still or reset controls');assert(context.elements.get('video-export-job-status').innerHTML.includes('40%'));
   context.host.closeModal();assert.equal(context.timers.size,0);assert.equal(context.calls.filter(call=>call.options.method==='DELETE').length,0,'closing the sheet never cancels the export');
   await context.open();assert.equal(context.state.modal.options.seconds_per_photo,8);assert.equal(context.state.modal.job.status,'encoding');assert.equal(context.timers.size,1,'reopening restores the cached job and resumes polling');

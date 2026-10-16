@@ -227,6 +227,48 @@ class VideoExportTests(unittest.TestCase):
         self.assertIn('Duration: 00:00:03.00',text)
         self.assertNotIn('Audio:',text)
 
+    def test_high_resolution_print_keeps_original_fine_detail_and_card_size(self):
+        source = self.root / 'fine-detail.png'
+        with Image.frombytes('L', (4000, 1), bytes(30 if (x // 3) % 2 == 0 else 230 for x in range(4000))) as row:
+            with row.resize((4000, 2000), Image.Resampling.NEAREST) as image:
+                image.save(source)
+        before = hashlib.sha256(source.read_bytes()).hexdigest()
+        for size, minimum_width in (((2560, 1440), 1900), ((3840, 2160), 2900)):
+            with self.subTest(size=size), patch('video_export._rounded_mask', wraps=_rounded_mask) as mask:
+                with compose_video_slide(source, self.meta, self.assets, size) as frame:
+                    self.assertEqual(frame.size, size)
+                    self.assertGreater(mask.call_args.args[0][0], minimum_width,
+                                       'the print fills its intended area instead of remaining capped at 1600 px')
+                    with frame.crop((size[0] // 2 - 100, size[1] // 2, size[0] // 2 + 100, size[1] // 2 + 1)) as detail:
+                        low, high = detail.getextrema()[0]
+                        self.assertGreater(high - low, 170, 'fine alternating detail survives original-resolution sampling')
+        self.assertEqual(hashlib.sha256(source.read_bytes()).hexdigest(), before)
+
+    def test_real_high_resolution_mp4s_default_to_4k_and_support_1440p(self):
+        for resolution, size, level in ((None, (3840, 2160), '5.1'), ('1440p', (2560, 1440), '5.0')):
+            with self.subTest(resolution=resolution):
+                options = {'seconds_per_photo': 3}
+                if resolution:
+                    options['resolution'] = resolution
+                output = self.root / f'{resolution or "default"}.mp4'
+                from video_export import _encode
+                with patch('video_export._encode', wraps=_encode) as encoder:
+                    result = encode_slideshow([(self.first, self.meta), (self.second, self.meta)],
+                                              self.assets, None, output, options, lambda *_: None, threading.Event())
+                self.assertEqual((result['width'], result['height']), size)
+                self.assertEqual(result['duration'], 5.2)
+                command = encoder.call_args.args[0]
+                self.assertEqual(command[command.index('-level:v') + 1], level)
+                self.assertEqual(command[command.index('-crf') + 1], '16')
+                with self.frame_at(output, 2.6) as frame:
+                    self.assertEqual(frame.size, size, 'the saved MP4 actually decodes at the chosen resolution')
+                    red, green, blue = frame.getpixel((size[0] // 2, size[1] // 2))
+                    self.assertTrue(80 < red < 155 and 85 < blue < 125, 'the high-resolution dissolve blends both photos')
+                probe = self.ffmpeg(['-i', str(output), '-c:v', 'copy', '-f', 'null', '-'])
+                self.assertEqual(probe.returncode, 0, probe.stderr.decode(errors='replace'))
+                self.assertIn('Video: h264', probe.stderr.decode(errors='replace'))
+                self.assertFalse(list(self.root.glob('render-*')))
+
     def test_cancelling_encoder_removes_partial_output_and_work_frames(self):
         cancelled=threading.Event();output=self.root/'cancel.mp4';started=time.monotonic()
         def progress(value,message):

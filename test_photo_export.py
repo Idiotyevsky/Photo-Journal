@@ -42,6 +42,15 @@ class PhotoExportTests(unittest.TestCase):
         with Image.open(BytesIO(render_framed_photo(self.path, self.metadata, self.assets))) as image:
             self.assertEqual(image.size, (3000, 2270))
 
+    def test_video_sized_render_uses_original_above_preview_limit_without_upscaling(self):
+        Image.new('RGB', (4000, 2000), 'navy').save(self.path)
+        original = self.path.read_bytes()
+        with Image.open(BytesIO(render_framed_photo(self.path, self.metadata, self.assets, max_width=2995))) as image:
+            self.assertEqual(image.size, (2995, 1768))
+        with Image.open(BytesIO(render_framed_photo(self.path, self.metadata, self.assets, max_width=5000))) as image:
+            self.assertEqual(image.size, (4000, 2360))
+        self.assertEqual(self.path.read_bytes(), original)
+
     def test_orientation_is_applied_once_and_old_exif_is_not_copied(self):
         source = Image.new("RGB", (600, 400), "red")
         source.paste((0, 70, 230), (0, 0, 300, 400))

@@ -78,9 +78,9 @@ class VideoJobManager:
         allowed = {"resolution", "seconds_per_photo", "order", "music_id", "volume"}
         if not isinstance(value, dict) or set(value) - allowed:
             raise VideoJobError(400, "视频导出设置中包含不支持的字段。")
-        result = {"resolution": "1080p", "seconds_per_photo": 5, "order": "collection", "music_id": None, "volume": 0.5, **value}
-        if result["resolution"] not in ("1080p", "720p"):
-            raise VideoJobError(400, "请选择 1080p 或 720p 清晰度。")
+        result = {"resolution": "4k", "seconds_per_photo": 5, "order": "collection", "music_id": None, "volume": 0.5, **value}
+        if result["resolution"] not in ("4k", "1440p", "1080p", "720p"):
+            raise VideoJobError(400, "请选择 4K、1440p、1080p 或 720p 清晰度。")
         if type(result["seconds_per_photo"]) is not int or result["seconds_per_photo"] not in (3, 4, 5, 6, 8, 10):
             raise VideoJobError(400, "每张照片的时长应为 3、4、5、6、8 或 10 秒。")
         if result["order"] not in ("collection", "oldest", "newest"):
