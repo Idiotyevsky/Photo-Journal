@@ -222,7 +222,11 @@ class DesktopTests(unittest.TestCase):
         window = FakeWindow()
         controller = desktop.DesktopController(window, Path("unused"), "http://127.0.0.1:9999")
         controller.loaded.set()
-        controller.after_start()
+        with patch.object(desktop, "install_video_downloads", return_value=object()) as install:
+            controller.after_start()
+            if os.name == "nt":
+                install.assert_called_once_with(window, controller.origin)
+                self.assertIsNotNone(controller.video_downloads)
         controller.run_smoke_test()
         window.evaluate_js.assert_not_called()
         window.toggle_fullscreen.assert_not_called()

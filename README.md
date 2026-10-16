@@ -57,7 +57,7 @@
 
 弹窗中显示实际生成的画面预览，开始导出后可查看进度或取消。导出期间可以关闭弹窗继续浏览，相册保持打开即可；再次打开该作品集的「导出视频」会恢复进度。一次支持最多 300 张照片、30 分钟视频。
 
-完成后可直接播放成片，并点击「下载 MP4」保存。请及时保存视频；重启相册后不保留尚未下载的成片。下载的视频是独立文件，请与需要保留的资料一同备份。
+完成后可直接播放成片，并点击「下载 MP4」保存。系统保存窗口默认选择「MP4 视频 (*.mp4)」，文件名包含 .mp4；重新输入没有后缀的名称时会自动补全。请及时保存视频；重启相册后不保留尚未下载的成片。下载的视频是独立文件，请与需要保留的资料一同备份。
 
 ## 拍摄地点与足迹地图
 
@@ -143,7 +143,7 @@
 
 验证：
 
-    python -m unittest -v test_desktop test_server test_photo_export test_video_api test_video_export test_color_analysis test_colors_api
+    python -m unittest -v test_desktop test_desktop_downloads test_server test_photo_export test_video_api test_video_export test_color_analysis test_colors_api
     node --check ui/app.js
     node test_atlas.cjs
     node test_atlas_vector.cjs

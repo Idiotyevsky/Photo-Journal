@@ -16,6 +16,8 @@ import threading
 import time
 from typing import Any
 
+from desktop_downloads import install_video_downloads
+
 
 APP_NAME = "拾光"
 TITLE = ""
@@ -312,6 +314,7 @@ class DesktopController:
         self.allow_close = threading.Event()
         self.close_check = threading.Event()
         self.smoke_result: dict | None = None
+        self.video_downloads = None
         window.events.loaded += self.loaded.set
         window.events.closed += self.closed.set
         window.events.closing += self.on_closing
@@ -367,6 +370,17 @@ class DesktopController:
                 self.allow_close.set()
                 self.window.destroy()
                 return
+        if os.name == "nt":
+            try:
+                self.video_downloads = install_video_downloads(self.window, self.origin)
+                LOG.info("MP4 video save dialog installed")
+            except Exception:
+                LOG.exception("Could not configure the MP4 save dialog")
+                if self.report:
+                    self.write_report({"ok": False, "error": "视频保存窗口未能完成初始化。"})
+                    self.allow_close.set()
+                    self.window.destroy()
+                    return
         if self.report:
             self.run_smoke_test()
 
