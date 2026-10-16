@@ -208,8 +208,8 @@ h1, h2, h3, p { margin: 0; }
 .photo-card:focus-within .favorite-button, .photo-card:focus-within .select-photo-button,
 .favorite-button.active, .photo-card.selected .select-photo-button,
 .selection-mode .select-photo-button, .is-selecting .select-photo-button { opacity: 1; }
-.favorite-button.active { color: #eedab9; background: rgb(79 96 104 / 90%); }
-.favorite-button.active .icon { fill: #eedab9; }
+.favorite-button.active { color: #ed626d; background: rgb(79 96 104 / 90%); }
+.favorite-button.active .icon { fill: currentColor; }
 .select-photo-button > .icon { opacity: 0; }
 .select-photo-button:hover > .icon { opacity: .5; }
 .photo-card.selected { border-color: var(--accent); outline: 2px solid #c8d4d6; outline-offset: 3px; }
@@ -406,11 +406,16 @@ h1, h2, h3, p { margin: 0; }
 .lightbox-actions { display: flex; align-items: center; gap: 9px; flex-shrink: 0; }
 .lightbox .icon-button { color: #a8b9c0; background: transparent; border-color: #54636c; }
 .lightbox .icon-button:hover { color: #dfe9ec; background: #3a4d58; border-color: #8296a2; }
-.lightbox .icon-button.active { color: #d7c4a9; }
-.lightbox .icon-button.active .icon { fill: #d7c4a9; }
+.lightbox .icon-button.active, .lightbox .icon-button.active:hover { color: #ed626d; }
+.lightbox .icon-button.active .icon { fill: currentColor; }
 .lightbox-body { display: flex; flex: 1; min-height: 0; }
 .lightbox-stage { position: relative; display: flex; align-items: center; justify-content: center; flex: 1; min-width: 0; padding: 32px 61px 49px; overflow: hidden; }
 .lightbox-stage > img { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }
+.lightbox-stage > img:focus-visible { outline: 2px solid #a8b9c0; outline-offset: 5px; }
+.photo-context-menu { position: fixed; z-index: 120; min-width: 214px; max-width: calc(100vw - 16px); padding: 5px; border: 1px solid #d6d9d1; border-radius: 7px; color: #384e59; background: #faf8f2; box-shadow: 0 8px 30px rgb(12 24 31 / 25%); }
+.photo-context-menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 13px; border: 0; border-radius: 4px; color: inherit; background: transparent; font-family: var(--sans); font-size: 14px; font-weight: 600; font-synthesis: weight; text-align: left; cursor: pointer; }
+.photo-context-menu button:hover, .photo-context-menu button:focus-visible { outline: none; background: #e9efec; }
+.photo-context-menu .icon { flex-shrink: 0; width: 17px; height: 17px; }
 .lightbox-nav { position: absolute; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 33px; height: 46px; padding: 6px; border: 1px solid #52626c; color: #a8bcc7; background: #2e3a42; }
 .lightbox-nav:hover { color: #dbe6ed; background: #405360; border-color: #839ba9; }
 .lightbox-nav.prev { left: 13px; }

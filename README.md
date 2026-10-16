@@ -37,6 +37,8 @@
 - 手记独立保存；照片重新归类或移除后，已经写下的文字仍可阅读和编辑。
 - 点击旅途记忆卡片右下角或手记详情中的垃圾桶图标，可删除这段记忆及文字，照片和作品集仍保留。删除结果会随相册资料保存，重新打开不会自动生成回来。
 
+查看大图时，右键点击照片，选择「在文件管理器中显示」，即可打开 Windows 文件管理器并选中相册本地保存的原图。该位置位于资料目录的 `originals` 文件夹中，迁移后也可继续定位。照片列表和大图查看界面中的收藏爱心在收藏后显示红色，再次点击可取消收藏。
+
 ## 色彩足迹
 
 点击左侧「色彩足迹」，可按月份、季度或年份翻阅照片的主要色彩、明暗、饱和度与冷暖倾向。「我的收藏」复用照片上的爱心，便于单独观察自己精选作品的色调。
@@ -145,7 +147,7 @@
 
 验证：
 
-    python -m unittest -v test_desktop test_desktop_downloads test_server test_collection_order test_photo_export test_video_api test_video_export test_color_analysis test_colors_api
+    python -m unittest -v test_desktop test_desktop_files test_desktop_downloads test_server test_collection_order test_photo_export test_video_api test_video_export test_color_analysis test_colors_api
     node --check ui/app.js
     node test_atlas.cjs
     node test_atlas_vector.cjs
@@ -156,6 +158,7 @@
     node test_colors.cjs
     node test_colors_app.cjs
     node test_collection_order.cjs
+    node test_photo_menu.cjs
 
 测试使用临时目录，不修改个人照片。
 

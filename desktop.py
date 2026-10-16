@@ -11,6 +11,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import re
 import sys
 import threading
 import time
@@ -167,7 +168,7 @@ class SingleInstance:
 
 
 class FullscreenBridge:
-    """The page can read or request fullscreen, and nothing else on the host."""
+    """Narrow controls for the native window's fullscreen state."""
 
     def __init__(self):
         self._window = None
@@ -243,6 +244,37 @@ class FullscreenBridge:
                 if actual != enabled:
                     raise RuntimeError("桌面窗口未能完成全屏切换。")
             return {"fullscreen": actual}
+
+
+class DesktopBridge(FullscreenBridge):
+    """Expose album photo IDs, never arbitrary paths, to the native file action."""
+
+    def __init__(self, store):
+        super().__init__()
+        self._store = store
+
+    def reveal_photo(self, photo_id: str) -> dict:
+        if not isinstance(photo_id, str) or not re.fullmatch(r"[a-f0-9]{32}", photo_id):
+            return {"ok": False, "error": "这张照片不存在。"}
+        from server import ApiError, FORMATS
+        from desktop_files import reveal_in_explorer
+        with self._lock, self._store.lock:
+            if self._closed:
+                return {"ok": False, "error": "相册已关闭。"}
+            with self._store.connect() as db:
+                row = db.execute("SELECT extension FROM photos WHERE id = ?", (photo_id,)).fetchone()
+            if not row or row["extension"] not in FORMATS.values():
+                return {"ok": False, "error": "这张照片已从相册移除。"}
+            try:
+                path = self._store.backup_media_path(self._store.originals, photo_id + row["extension"], "原图")
+            except ApiError:
+                return {"ok": False, "error": "原图文件不存在或已移动，暂时无法定位。"}
+            try:
+                reveal_in_explorer(path)
+            except OSError:
+                LOG.warning("Could not reveal an album photo", exc_info=True)
+                return {"ok": False, "error": "文件管理器暂时无法打开，请稍后重试。"}
+        return {"ok": True}
 
 
 SMOKE_SCRIPT = """
@@ -436,7 +468,7 @@ class DesktopController:
                 and result.get("origin") == self.origin
                 and result["native_title_empty"]
                 and fullscreen.get("desktop_marker")
-                and fullscreen.get("api_methods") == ["get_fullscreen", "set_fullscreen"]
+                and fullscreen.get("api_methods") == sorted(name for name in ("get_fullscreen", "set_fullscreen", "reveal_photo") if callable(getattr(self.fullscreen_api, name, None)))
                 and fullscreen.get("module_entered") is True
                 and fullscreen.get("module_exited") is True
                 and fullscreen.get("initial") == {"fullscreen": False}
@@ -499,7 +531,7 @@ def main(argv: list[str] | None = None) -> int:
         webview.settings["ALLOW_FILE_URLS"] = False
         webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = False
         webview.settings["OPEN_DEVTOOLS_IN_DEBUG"] = False
-        fullscreen_api = FullscreenBridge()
+        fullscreen_api = DesktopBridge(album_server.store)
         window = webview.create_window(
             TITLE, origin + "/?desktop=1", width=1440, height=960, min_size=(1000, 720),
             resizable=True, frameless=False, confirm_close=False,

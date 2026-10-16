@@ -268,7 +268,7 @@ class DesktopTests(unittest.TestCase):
 
     def test_engine_failure_stops_owned_server_and_releases_mutex(self):
         stopped = threading.Event()
-        service = types.SimpleNamespace(server_port=9999, shutdown=Mock(side_effect=stopped.set),
+        service = types.SimpleNamespace(server_port=9999, store=Mock(), shutdown=Mock(side_effect=stopped.set),
                                         server_close=Mock(), serve_forever=lambda **kwargs: stopped.wait(5))
         window = FakeWindow()
         engine = types.SimpleNamespace(settings={}, create_window=Mock(return_value=window),
@@ -293,6 +293,8 @@ class DesktopTests(unittest.TestCase):
             self.assertFalse(kwargs["frameless"])
             self.assertFalse(kwargs["fullscreen"])
             self.assertIsInstance(kwargs["js_api"], desktop.FullscreenBridge)
+            self.assertIsInstance(kwargs["js_api"], desktop.DesktopBridge)
+            self.assertIs(kwargs["js_api"]._store, service.store)
 
 
 if __name__ == "__main__":
