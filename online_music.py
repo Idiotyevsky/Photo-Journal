@@ -13,9 +13,15 @@ import uuid
 
 
 API = 'https://music-api.gdstudio.xyz/api.php'
-SOURCES = {'netease': '网易云', 'joox': 'JOOX', 'bilibili': '哔哩哔哩'}
+SOURCES = {'netease': '网易云', 'tencent': 'QQ音乐', 'kuwo': '酷我音乐',
+           'tidal': 'TIDAL', 'qobuz': 'Qobuz', 'joox': 'JOOX',
+           'bilibili': '哔哩哔哩', 'apple': 'Apple Music',
+           'ytmusic': 'YouTube Music', 'spotify': 'Spotify'}
 MEDIA_DOMAINS = ('gdstudio.xyz', 'music.126.net', 'music.163.com', 'joox.com',
-                 'jooxmusic.com', 'qq.com', 'gtimg.com', 'bilivideo.com', 'bilivideo.cn', 'bilivideo.cloud')
+                 'jooxmusic.com', 'qq.com', 'gtimg.com', 'bilivideo.com', 'bilivideo.cn', 'bilivideo.cloud',
+                 'kuwo.cn', 'kuwo.com', 'tidal.com', 'tidalhifi.com', 'akamaized.net',
+                 'qobuz.com', 'qobuz.net', 'apple.com', 'mzstatic.com',
+                 'googlevideo.com', 'googleusercontent.com', 'scdn.co', 'spotifycdn.com')
 MAX_BYTES = 100 * 1024 * 1024
 
 
@@ -171,7 +177,7 @@ class OnlineMusic:
                 raw = self._api({'types': 'url', 'source': record['source'], 'id': record['id'], 'br': 320})
                 if not isinstance(raw, dict) or not raw.get('url'):
                     raise OnlineMusicError(404, '这首音乐暂时没有可用音频，可尝试更换音乐源。')
-                self._urls[token] = (time.monotonic(), public_url(raw['url']))
+                self._urls[token] = (time.monotonic(), public_url(urljoin(API, raw['url'])))
             return {'url': self._urls[token][1]}
 
     def import_track(self, value):

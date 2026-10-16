@@ -86,6 +86,27 @@ class MP3HeaderTests(unittest.TestCase):
 
 
 class OnlineMusicNetworkTests(unittest.TestCase):
+    def test_all_official_sources_match_ui_and_resolve_cached_audio_paths(self):
+        import re
+        from urllib.parse import parse_qs, urlsplit
+        expected={'netease','tencent','kuwo','tidal','qobuz','joox','bilibili','apple','ytmusic','spotify'}
+        self.assertEqual(set(online_music.SOURCES),expected)
+        source=(Path(__file__).resolve().parents[1]/'ui/online-music.js').read_text(encoding='utf-8')
+        options=json.loads(re.search(r'const SOURCES=(\[.*?\]);',source).group(1).replace("'",'"'))
+        self.assertEqual(dict(options),online_music.SOURCES)
+        client=online_music.OnlineMusic(None)
+        def fetch(url,*_args,**_kwargs):
+            values=parse_qs(urlsplit(url).query)
+            if values['types']==['search']:
+                return json.dumps([{'id':'id','name':'Song','source':values['source'][0]}]).encode()
+            return b'{"url":"cache/audio.m4a"}'
+        with patch('online_music.fetch_bytes',side_effect=fetch),patch('online_music.public_url',side_effect=lambda value:value):
+            for name in expected:
+                with self.subTest(source=name):
+                    result=client.search({'query':'Song','source':name})
+                    self.assertEqual(result['tracks'][0]['source'],name)
+                    self.assertEqual(client.preview({'token':result['tracks'][0]['token']})['url'],'https://music-api.gdstudio.xyz/cache/audio.m4a')
+
     def test_only_public_provider_hosts_and_https_redirects_are_accepted(self):
         public = [(2, 1, 6, '', ('8.8.8.8', 443))]
         with patch('online_music.socket.getaddrinfo', return_value=public):

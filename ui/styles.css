@@ -900,6 +900,7 @@ details.atlas-coordinate-fields[open] > .field:first-of-type { margin-right: 12p
 .online-music-pages { display: flex; align-items: center; justify-content: center; gap: 18px; margin-top: 13px; color: var(--muted); font-size: 13px; }
 .online-music-error, .online-music-empty { margin: 12px 0 0; color: var(--muted); font-size: 13px; line-height: 1.8; }
 .online-music-error { color: #ad5550; }
+.online-music-panel [hidden] { display: none !important; }
 @media (max-width: 600px) { .online-music-search { grid-template-columns: minmax(0, 1fr) auto; } .online-music-search input { grid-column: 1 / -1; } .online-music-track { gap: 8px; } }
 .settings-audio-empty { padding: 25px 15px; color: var(--muted); font-family: var(--sans); font-size: 14px; font-weight: 600; font-synthesis: weight; text-align: center; }
 .settings-error { display: flex; flex-direction: column; align-items: center; gap: 15px; padding: 30px 15px; color: var(--muted); }

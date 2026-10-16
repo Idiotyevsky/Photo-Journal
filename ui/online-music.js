@@ -2,6 +2,7 @@
 (() => {
   'use strict';
   let host=null,request=null,player=null,generation=0;
+  const SOURCES=[['netease','网易云'],['tencent','QQ音乐'],['kuwo','酷我音乐'],['tidal','TIDAL'],['qobuz','Qobuz'],['joox','JOOX'],['bilibili','哔哩哔哩'],['apple','Apple Music'],['ytmusic','YouTube Music'],['spotify','Spotify']];
   const state={open:false,query:'',source:'netease',searchedQuery:'',page:1,tracks:[],hasMore:false,searched:false,loading:false,error:'',playing:null,importing:null,imported:new Map()};
   const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const active=()=>host?.getState().modal?.type==='settings'&&host.getState().modal.tab==='audio';
@@ -19,7 +20,38 @@
   function render(){
     if(!state.open)return '';
     const frozen=host.isBusy(),disabled=frozen||state.loading?'disabled':'';
-    return `<section class="online-music-panel" aria-label="在线导入音乐"><div class="online-music-heading"><strong>在线选曲</strong><span>音乐来源：<a href="https://music.gdstudio.xyz/" target="_blank" rel="noopener noreferrer">GD音乐台</a></span></div><form id="online-music-search" class="online-music-search"><label class="visually-hidden" for="online-music-query">搜索歌名、歌手或专辑</label><input id="online-music-query" type="search" placeholder="歌名、歌手或专辑" maxlength="80" value="${esc(state.query)}" ${disabled}><label class="visually-hidden" for="online-music-source">音乐源</label><select id="online-music-source" ${disabled}>${[['netease','网易云'],['joox','JOOX'],['bilibili','哔哩哔哩']].map(([value,label])=>`<option value="${value}" ${state.source===value?'selected':''}>${label}</option>`).join('')}</select><button class="button secondary small" type="submit" ${disabled}>${state.loading?'搜索中…':'搜索'}</button></form>${state.error?`<p class="online-music-error" role="alert">${esc(state.error)}</p>`:''}<div class="online-music-results" aria-live="polite" aria-busy="${state.loading}">${state.tracks.map(track=>`<article class="online-music-track"><div class="online-music-copy"><strong>${esc(track.title)}</strong><span>${esc([track.artist,track.album].filter(Boolean).join(' · '))}</span></div><div class="online-music-actions"><button class="button ghost small" data-action="settings-online-preview" data-token="${esc(track.token)}" aria-pressed="${state.playing===track.token}" ${frozen?'disabled':''}>${state.playing===track.token?'停止':'试听'}</button><button class="button secondary small" data-action="settings-online-import" data-token="${esc(track.token)}" ${frozen||imported(track.token)?'disabled':''}>${state.importing===track.token?'导入中…':imported(track.token)?'已导入':'导入'}</button></div></article>`).join('')}${state.searched&&!state.loading&&!state.tracks.length&&!state.error?'<p class="online-music-empty">没有找到曲目，试试其他关键词或音乐源。</p>':''}</div>${state.searched&&(state.page>1||state.hasMore)?`<div class="online-music-pages"><button class="inline-link" data-action="settings-online-previous" ${disabled||state.page<=1?'disabled':''}>上一页</button><span>第 ${state.page} 页</span><button class="inline-link" data-action="settings-online-next" ${disabled||!state.hasMore?'disabled':''}>下一页</button></div>`:''}</section>`;
+    return `<section class="online-music-panel" aria-label="在线导入音乐"><div class="online-music-heading"><strong>在线选曲</strong><span>音乐来源：<a href="https://music.gdstudio.xyz/" target="_blank" rel="noopener noreferrer">GD音乐台</a></span></div><form id="online-music-search" class="online-music-search"><label class="visually-hidden" for="online-music-query">搜索歌名、歌手或专辑</label><input id="online-music-query" type="search" placeholder="歌名、歌手或专辑" maxlength="80" value="${esc(state.query)}" ${disabled}><label class="visually-hidden" for="online-music-source">音乐源</label><select id="online-music-source" ${disabled}>${SOURCES.map(([value,label])=>`<option value="${value}" ${state.source===value?'selected':''}>${label}</option>`).join('')}</select><button class="button secondary small" type="submit" ${disabled}>${state.loading?'搜索中…':'搜索'}</button></form><p class="online-music-error" role="alert" ${state.error?'':'hidden'}>${esc(state.error)}</p><div class="online-music-results" aria-live="polite" aria-busy="${state.loading}">${state.tracks.map(track=>`<article class="online-music-track" data-online-token="${esc(track.token)}"><div class="online-music-copy"><strong>${esc(track.title)}</strong><span>${esc([track.artist,track.album].filter(Boolean).join(' · '))}</span></div><div class="online-music-actions"><button class="button ghost small" data-action="settings-online-preview" data-token="${esc(track.token)}" aria-pressed="${state.playing===track.token}" ${frozen?'disabled':''}>${state.playing===track.token?'停止':'试听'}</button><button class="button secondary small" data-action="settings-online-import" data-token="${esc(track.token)}" ${frozen||imported(track.token)?'disabled':''}>${state.importing===track.token?'导入中…':imported(track.token)?'已导入':'导入'}</button></div></article>`).join('')}</div><p class="online-music-empty" ${state.searched&&!state.loading&&!state.tracks.length&&!state.error?'':'hidden'}>没有找到曲目，试试其他关键词或音乐源。</p><div class="online-music-pages" ${state.searched&&(state.page>1||state.hasMore)?'':'hidden'}><button class="inline-link" data-action="settings-online-previous" ${disabled||state.page<=1?'disabled':''}>上一页</button><span>第 ${state.page} 页</span><button class="inline-link" data-action="settings-online-next" ${disabled||!state.hasMore?'disabled':''}>下一页</button></div></section>`;
+  }
+  function update(){
+    const slot=document.getElementById('settings-online-music');if(!slot)return;
+    let panel=slot.querySelector('.online-music-panel');
+    if(!state.open){if(panel)panel.remove();return;}
+    if(!panel){slot.innerHTML=render();panel=slot.querySelector('.online-music-panel');}
+    const frozen=host.isBusy(),locked=frozen||state.loading;
+    const query=panel.querySelector('#online-music-query'),source=panel.querySelector('#online-music-source');
+    if(query.value!==state.query)query.value=state.query;
+    source.value=state.source;query.disabled=locked;source.disabled=locked;
+    const submit=panel.querySelector('[type="submit"]');submit.disabled=locked;submit.textContent=state.loading?'搜索中…':'搜索';
+    const error=panel.querySelector('.online-music-error');error.textContent=state.error;error.hidden=!state.error;
+    const results=panel.querySelector('.online-music-results'),tokens=JSON.stringify(state.tracks.map(track=>track.token));
+    // Only new search results replace rows. Playback and busy changes keep the
+    // same inputs, buttons and scroll containers alive.
+    if(results.dataset.tokens!==tokens){
+      const fragment=document.createElement('div');fragment.innerHTML=render();
+      results.innerHTML=fragment.querySelector('.online-music-results').innerHTML;
+      results.dataset.tokens=tokens;results.scrollTop=0;
+    }
+    results.setAttribute('aria-busy',String(state.loading));
+    results.querySelectorAll('[data-online-token]').forEach(row=>{
+      const token=row.dataset.onlineToken,preview=row.querySelector('[data-action="settings-online-preview"]'),button=row.querySelector('[data-action="settings-online-import"]');
+      const playing=state.playing===token;preview.textContent=playing?'停止':'试听';preview.setAttribute('aria-pressed',String(playing));preview.disabled=frozen;
+      button.textContent=state.importing===token?'导入中…':imported(token)?'已导入':'导入';button.disabled=frozen||imported(token);
+    });
+    panel.querySelector('.online-music-empty').hidden=!state.searched||state.loading||Boolean(state.tracks.length)||Boolean(state.error);
+    const pages=panel.querySelector('.online-music-pages');pages.hidden=!state.searched||(!state.hasMore&&state.page<=1);
+    pages.querySelector('span').textContent=`第 ${state.page} 页`;
+    pages.querySelector('[data-action="settings-online-previous"]').disabled=locked||state.page<=1;
+    pages.querySelector('[data-action="settings-online-next"]').disabled=locked||!state.hasMore;
   }
   async function search(page=1){
     if(!active()||host.isBusy()||state.loading)return;
@@ -68,5 +100,5 @@
   document.addEventListener('submit',event=>{if(event.target.id==='online-music-search'){event.preventDefault();void search();}});
   document.addEventListener('input',event=>{if(event.target.id==='online-music-query')state.query=event.target.value;});
   document.addEventListener('change',event=>{if(event.target.id==='online-music-source'){cancelRequest();stopPreview();state.source=event.target.value;state.tracks=[];state.searched=false;state.page=1;state.error='';redraw();}});
-  window.ShiguangOnlineMusic={configure,render,handleAction,onClose,stop,volumeChanged:value=>{if(player)player.volume=value;}};
+  window.ShiguangOnlineMusic={configure,render,update,handleAction,onClose,stop,volumeChanged:value=>{if(player)player.volume=value;}};
 })();

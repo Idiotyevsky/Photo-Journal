@@ -88,7 +88,7 @@
 
 内置 Scott Buckley 的九首完整录音：Hymn、The Long Way Home、Castles in the Sky、Reverie、A Kind Of Hope、Sleep（官方纯钢琴版）、Midvinter、Moonlight、Solace，均采用 CC BY 4.0 许可，未作剪辑。官方来源与署名致谢见 [背景音乐说明](ui/audio/CREDITS.md)，也可在相册的「使用与保存说明」中查看。
 
-在「设置 → 背景音乐」点击「在线导入」，可以通过 [GD音乐台](https://music.gdstudio.xyz/) 搜索歌名、歌手或专辑，切换网易云、JOOX、哔哩哔哩音乐源，试听后选择导入。搜索和试听需要联网；音频成功导入后保存在本地曲库，可离线播放、参与随机播放、用于视频配乐，并包含在完整迁移包中。曲名、作者一同保存，重复导入不会覆盖已经修改的曲名。
+在「设置 → 背景音乐」点击「在线导入」，可以通过 [GD音乐台](https://music.gdstudio.xyz/) 搜索歌名、歌手或专辑，选择官方列出的全部 10 个音乐源：网易云、QQ音乐、酷我音乐、TIDAL、Qobuz、JOOX、哔哩哔哩、Apple Music、YouTube Music 和 Spotify，试听后选择导入。搜索和试听需要联网；音频成功导入后保存在本地曲库，可离线播放、参与随机播放、用于视频配乐，并包含在完整迁移包中。曲名、作者一同保存，重复导入不会覆盖已经修改的曲名。搜索、试听、导入和设置操作采用局部更新，保留弹窗、输入框及滚动位置。
 
 音乐源可能临时不可用，遇到空结果、无可用音频或访问频率限制时，可稍后重试或更换来源。接口资料及署名见 [在线音乐说明](assets/third-party/ONLINE-MUSIC.md)。
 
