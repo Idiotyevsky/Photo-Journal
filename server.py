@@ -452,6 +452,60 @@ class AlbumStore:
         with self.connect() as db:
             return self.settings_record(db)
 
+    def opening_lines_record(self, db) -> list[dict]:
+        row = db.execute("SELECT value_json FROM app_settings WHERE key = 'opening-lines'").fetchone()
+        if row:
+            try:
+                lines = json.loads(row['value_json'])
+                if not isinstance(lines, list) or len(lines) > 1000:
+                    raise ValueError
+                ids = set()
+                for line in lines:
+                    if not isinstance(line, dict) or set(line) != {'id', 'text', 'origin'} or not isinstance(line['id'], str) or not re.fullmatch(r'[a-z][a-z0-9_-]{0,63}', line['id']) or line['id'] in ids or line['origin'] not in {'builtin', 'custom'} or not isinstance(line['text'], str) or not 1 <= len(line['text']) <= 120:
+                        raise ValueError
+                    ids.add(line['id'])
+                return lines
+            except (TypeError, ValueError, KeyError):
+                raise ApiError(500, '开场白资料暂时无法读取，请保留相册资料并重试。') from None
+        source = self.web_dir / 'daily-quotes.json'
+        if not source.is_file():
+            source = ROOT / 'ui' / 'daily-quotes.json'
+        texts = json.loads(source.read_text(encoding='utf-8'))
+        return [{'id': f'builtin_{index:03d}', 'text': text, 'origin': 'builtin'} for index, text in enumerate(texts, 1)]
+
+    def opening_lines(self) -> dict:
+        with self.lock, self.connect() as db:
+            return {'lines': self.opening_lines_record(db)}
+
+    @staticmethod
+    def save_opening_lines(db, lines):
+        db.execute("INSERT INTO app_settings(key,value_json) VALUES('opening-lines',?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json", (json.dumps(lines, ensure_ascii=False),))
+
+    def add_opening_line(self, changes: dict) -> dict:
+        if not isinstance(changes, dict) or set(changes) != {'text'}:
+            raise ApiError(400, '请填写一句开场白。')
+        text = clean_text(changes['text'], 120, '开场白')
+        if not text:
+            raise ApiError(400, '开场白不能为空。')
+        with self.lock, self.connect() as db:
+            lines = self.opening_lines_record(db)
+            if any(line['text'] == text for line in lines):
+                raise ApiError(409, '这句开场白已经在库中。')
+            if len(lines) >= 1000:
+                raise ApiError(400, '开场白库最多保存 1000 句。')
+            lines.append({'id': 'custom_' + uuid.uuid4().hex, 'text': text, 'origin': 'custom'})
+            self.save_opening_lines(db, lines)
+            return {'lines': lines}
+
+    def delete_opening_line(self, line_id: str) -> dict:
+        with self.lock, self.connect() as db:
+            lines = self.opening_lines_record(db)
+            remaining = [line for line in lines if line['id'] != line_id]
+            if len(remaining) == len(lines):
+                raise ApiError(404, '这句开场白已不存在。')
+            self.save_opening_lines(db, remaining)
+            return {'lines': remaining}
+
     def update_settings(self, changes: dict) -> dict:
         if not isinstance(changes, dict) or set(changes) - {"theme", "music_volume"}:
             raise ApiError(400, "设置中包含不支持的字段。")
@@ -1222,7 +1276,7 @@ class AlbumHandler(BaseHTTPRequestHandler):
             video_create = re.fullmatch(r"/api/collections/([a-f0-9]{32})/video", path)
             video_preview = re.fullmatch(r"/api/collections/([a-f0-9]{32})/video-preview", path)
             video_job = re.fullmatch(r"/api/video-jobs/([a-f0-9]{32})(/file)?", path)
-            self.security_check(require_same_origin=path in {"/api/backup", "/api/colors"} or path.startswith("/api/music/online/") or any(item is not None for item in (framed, video_create, video_preview, video_job)))
+            self.security_check(require_same_origin=path in {"/api/backup", "/api/colors", "/daily-quotes.js"} or path.startswith(("/api/music/online/", "/api/opening-lines")) or any(item is not None for item in (framed, video_create, video_preview, video_job)))
             query = parse_qs(target.query, keep_blank_values=True)
             store = self.server.store
             if self.command in {"GET", "HEAD"}:
@@ -1242,6 +1296,18 @@ class AlbumHandler(BaseHTTPRequestHandler):
                     self.send_json(200, store.atlas())
                 elif path == "/api/settings":
                     self.send_json(200, store.settings())
+                elif path == '/api/opening-lines':
+                    if query:
+                        raise ApiError(400, '开场白列表不需要额外参数。')
+                    self.send_json(200, store.opening_lines())
+                elif path == '/daily-quotes.js':
+                    data = ('window.ShiguangDailyQuotes=Object.freeze(' + json.dumps([line['text'] for line in store.opening_lines()['lines']]) + ');').encode('utf-8')
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/javascript; charset=utf-8')
+                    self.send_header('Cache-Control', 'no-store')
+                    self.common_headers(len(data))
+                    if self.command != 'HEAD':
+                        self.wfile.write(data)
                 elif path == "/api/music":
                     self.send_json(200, store.music())
                 elif video_preview:
@@ -1264,7 +1330,7 @@ class AlbumHandler(BaseHTTPRequestHandler):
                 elif re.fullmatch(r"/api/collections/[a-f0-9]{32}/route", path):
                     self.send_json(200, store.get_route(path.split("/")[3]))
                 elif path == "/api/export":
-                    self.send_json(200, {"version": 1, "exported_at": now(), **store.photos(), **store.journals(), **store.collections(), "atlas": store.atlas(), "settings": store.settings(), "music": store.music()}, attachment="相册资料.json")
+                    self.send_json(200, {"version": 1, "exported_at": now(), **store.photos(), **store.journals(), **store.collections(), "atlas": store.atlas(), "settings": store.settings(), "music": store.music(), "opening_lines": store.opening_lines()['lines']}, attachment="相册资料.json")
                 elif path == "/api/backup":
                     self.send_backup()
                 elif framed:
@@ -1280,6 +1346,8 @@ class AlbumHandler(BaseHTTPRequestHandler):
                     self.send_json(202, {"job": self.server.video_jobs.start(video_create.group(1), self.read_json())})
                 elif path == "/api/settings":
                     self.send_json(200, store.update_settings(self.read_json()))
+                elif path == '/api/opening-lines':
+                    self.send_json(201, store.add_opening_line(self.read_json(8192)))
                 elif path in {"/api/music/online/search", "/api/music/online/preview", "/api/music/online/import"}:
                     methods = {"search": self.server.online_music.search, "preview": self.server.online_music.preview, "import": self.server.online_music.import_track}
                     result = methods[path.rsplit("/", 1)[1]](self.read_json(8192))
@@ -1319,6 +1387,8 @@ class AlbumHandler(BaseHTTPRequestHandler):
                     self.send_json(200, store.update_journal(path[len("/api/journals/"):], self.read_json()))
                 else:
                     raise ApiError(404, "没有找到这个接口。")
+            elif self.command == 'DELETE' and re.fullmatch(r'/api/opening-lines/[a-z][a-z0-9_-]{0,63}', path):
+                self.send_json(200, store.delete_opening_line(path.rsplit('/', 1)[1]))
             elif self.command == "DELETE" and video_job and not video_job.group(2):
                 self.send_json(200, {"job": self.server.video_jobs.cancel(video_job.group(1))})
             elif self.command == "DELETE" and re.fullmatch(r"/api/collections/[a-f0-9]{32}/photos", path):

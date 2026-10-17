@@ -1308,6 +1308,61 @@ class AlbumTests(unittest.TestCase):
                 self.assertEqual(self.json_request("POST", "/api/atlas", {"stops": [{**updated, **invalid}]})[0], 400)
                 self.assertEqual(self.request("GET", "/api/atlas")[1], atlas)
 
+    def test_opening_line_management_persists_exports_and_migrates(self):
+        status, original = self.request('GET', '/api/opening-lines')
+        self.assertEqual(status, 200); self.assertEqual(len(original['lines']), 100)
+        builtin = original['lines'][0]['id']
+        text = '在自己的时区里，慢慢发光。<script>珍惜今天</script>'
+        status, added = self.json_request('POST', '/api/opening-lines', {'text': '  '+text+'  '})
+        self.assertEqual(status, 201); self.assertEqual(len(added['lines']), 101)
+        custom = added['lines'][-1]
+        self.assertEqual(custom['origin'], 'custom'); self.assertEqual(custom['text'], text)
+        self.assertEqual(self.json_request('POST', '/api/opening-lines', {'text': text})[0], 409)
+        self.assertEqual(self.request('DELETE', '/api/opening-lines/'+builtin)[0], 200)
+        current = self.server.store.opening_lines()
+        self.assertEqual(len(current['lines']), 100)
+        self.assertNotIn(builtin, [line['id'] for line in current['lines']])
+        self.assertEqual(server.AlbumStore(self.server.store.root).opening_lines(), current)
+        status, headers, body = self.file_response('/daily-quotes.js')
+        self.assertEqual(status, 200); self.assertIn('application/javascript', headers['Content-Type'])
+        self.assertEqual(headers['Cache-Control'], 'no-store')
+        prefix = 'window.ShiguangDailyQuotes=Object.freeze('
+        script = body.decode('utf-8'); self.assertTrue(script.startswith(prefix))
+        self.assertEqual(json.loads(script[len(prefix):-2]), [line['text'] for line in current['lines']])
+        self.assertEqual(self.request('GET', '/api/export')[1]['opening_lines'], current['lines'])
+        with self.server.store.backup_archive(self.application_file) as path:
+            with zipfile.ZipFile(path) as archive:
+                directory = self.root/'migrated-opening'; directory.mkdir()
+                (directory/'album.sqlite3').write_bytes(archive.read('拾光相册/album-data/album.sqlite3'))
+        self.assertEqual(server.AlbumStore(directory).opening_lines(), current)
+        self.assertEqual(self.request('DELETE', '/api/opening-lines/'+custom['id'])[0], 200)
+        self.assertEqual(self.request('DELETE', '/api/opening-lines/'+custom['id'])[0], 404)
+        with self.server.store.connect() as db:
+            self.server.store.save_opening_lines(db, [])
+        self.assertEqual(server.AlbumStore(self.server.store.root).opening_lines(), {'lines': []})
+        self.assertEqual(self.file_response('/daily-quotes.js')[2], b'window.ShiguangDailyQuotes=Object.freeze([]);')
+
+    def test_opening_line_validation_security_and_failed_commit_are_atomic(self):
+        original = self.server.store.opening_lines()
+        for value in ({}, {'text': ''}, {'text': '   '}, {'text': '\0'}, {'text': 123}, {'text': True}, {'text': '字'*121}, {'text': '句子', 'id': 'other'}):
+            with self.subTest(value=value):
+                self.assertEqual(self.json_request('POST', '/api/opening-lines', value)[0], 400)
+                self.assertEqual(self.server.store.opening_lines(), original)
+        for path in ('/api/opening-lines', '/daily-quotes.js'):
+            self.assertEqual(self.request('GET', path, headers={'Sec-Fetch-Site': 'cross-site'})[0], 403)
+        self.assertEqual(self.request('POST', '/api/opening-lines', json.dumps({'text': '不应写入'}).encode(), headers={'Origin': 'https://outside.example', 'Content-Type': 'application/json'})[0], 403)
+        self.assertEqual(self.request('DELETE', '/api/opening-lines/'+original['lines'][0]['id'], headers={'Sec-Fetch-Site': 'cross-site'})[0], 403)
+        self.assertEqual(self.request('GET', '/api/opening-lines?unknown=1')[0], 400)
+        real_connect = self.server.store.connect
+        @contextmanager
+        def failed_commit():
+            with real_connect() as db:
+                yield db
+                raise sqlite3.OperationalError('injected opening-line commit failure')
+        with patch.object(self.server.store, 'connect', failed_commit):
+            self.assertEqual(self.json_request('POST', '/api/opening-lines', {'text': '不应留下半次修改'})[0], 500)
+        self.assertEqual(self.server.store.opening_lines(), original)
+
     def test_settings_persist_partial_updates_validate_and_roll_back(self):
         self.assertEqual(self.request("GET", "/api/settings"), (200, {"theme": "classic", "music_volume": 0.22}))
         status, stored = self.json_request("POST", "/api/settings", {"theme": "italian", "music_volume": 0.35})
