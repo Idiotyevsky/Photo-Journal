@@ -359,6 +359,17 @@ class DesktopController:
         except (AttributeError, TypeError, ValueError):
             return 0
 
+    def clear_profile(self) -> None:
+        """Clear this album's embedded browser cache after an explicit initialization."""
+        from System import Action
+        tasks = []
+        def begin():
+            core = self.window.native.browser.webview.CoreWebView2
+            tasks.append(core.Profile.ClearBrowsingDataAsync())
+        self.window.native.Invoke(Action(begin))
+        if not tasks or not tasks[0].Wait(15000):
+            raise RuntimeError('相册缓存未能及时清理。')
+
     def on_closing(self):
         if self.allow_close.is_set() or not self.loaded.is_set():
             return None
@@ -450,6 +461,7 @@ class DesktopController:
             if not isinstance(result, dict):
                 raise ValueError("桌面页面返回了无效的验证资料。")
             health = result.get("health") or {}
+            result['native_maximized'] = str(self.window.native.WindowState) == 'Maximized'
             fullscreen_completed = threading.Event()
             fullscreen_values: list[Any] = []
 
@@ -474,6 +486,7 @@ class DesktopController:
                 and health.get("data_dir") == str(self.data_dir)
                 and result.get("origin") == self.origin
                 and result["native_title_empty"]
+                and result['native_maximized']
                 and fullscreen.get("desktop_marker")
                 and fullscreen.get("api_methods") == sorted(name for name in ("get_fullscreen", "set_fullscreen", "reveal_photo") if callable(getattr(self.fullscreen_api, name, None)))
                 and fullscreen.get("module_entered") is True
@@ -543,12 +556,13 @@ def main(argv: list[str] | None = None) -> int:
             TITLE, origin + "/?desktop=1", width=1440, height=960, min_size=(1000, 720),
             resizable=True, frameless=False, confirm_close=False,
             background_color="#f7f3ea", text_select=True,
-            fullscreen=False, js_api=fullscreen_api,
+            fullscreen=False, maximized=True, js_api=fullscreen_api,
         )
         if window is None:
             raise RuntimeError("桌面窗口未能创建。")
         fullscreen_api._bind(window)
         controller = DesktopController(window, data_dir, origin, report, fullscreen_api)
+        album_server.clear_profile = controller.clear_profile
         icon = bundle_root / "assets" / "app.ico"
         webview.start(
             controller.after_start, gui="edgechromium", debug=False,

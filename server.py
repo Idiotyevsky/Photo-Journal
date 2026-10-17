@@ -418,6 +418,10 @@ class AlbumStore:
                     position = positions.get(member["collection_id"], 0)
                     db.execute("UPDATE collection_photos SET position=? WHERE collection_id=? AND photo_id=?", (position, member["collection_id"], member["photo_id"]))
                     positions[member["collection_id"]] = position + 1
+        from album_reset import recover
+        recover(self)
+        self.originals.mkdir(exist_ok=True)
+        self.previews.mkdir(exist_ok=True)
         self.recover_deletions()
 
     @contextmanager
@@ -1221,6 +1225,8 @@ class AlbumHTTPServer(ThreadingHTTPServer):
         self.colors = ColorAnalysis(self.store)
         self.video_jobs = VideoJobManager(self.store, self.web_dir / "assets")
         self.online_music = OnlineMusic(self.store)
+        from album_reset import RequestGate
+        self.request_gate = RequestGate()
         super().__init__(("127.0.0.1", port), AlbumHandler)
 
     def server_close(self):
@@ -1269,6 +1275,15 @@ class AlbumHandler(BaseHTTPRequestHandler):
                 raise ApiError(403, "为保护本地照片，已拒绝来自其他网页的操作。")
 
     def dispatch(self):
+        exclusive = self.command == 'POST' and unquote(urlsplit(self.path).path) == '/api/initialize'
+        try:
+            with self.server.request_gate.enter(exclusive):
+                self.dispatch_request()
+        except ApiError as error:
+            self.close_connection = True
+            self.send_json(error.status, {'error': error.message})
+
+    def dispatch_request(self):
         try:
             target = urlsplit(self.path)
             path = unquote(target.path)
@@ -1276,7 +1291,7 @@ class AlbumHandler(BaseHTTPRequestHandler):
             video_create = re.fullmatch(r"/api/collections/([a-f0-9]{32})/video", path)
             video_preview = re.fullmatch(r"/api/collections/([a-f0-9]{32})/video-preview", path)
             video_job = re.fullmatch(r"/api/video-jobs/([a-f0-9]{32})(/file)?", path)
-            self.security_check(require_same_origin=path in {"/api/backup", "/api/colors", "/daily-quotes.js"} or path.startswith(("/api/music/online/", "/api/opening-lines")) or any(item is not None for item in (framed, video_create, video_preview, video_job)))
+            self.security_check(require_same_origin=path in {"/api/backup", "/api/colors", "/daily-quotes.js", "/api/initialize"} or path.startswith(("/api/music/online/", "/api/opening-lines")) or any(item is not None for item in (framed, video_create, video_preview, video_job)))
             query = parse_qs(target.query, keep_blank_values=True)
             store = self.server.store
             if self.command in {"GET", "HEAD"}:
@@ -1342,7 +1357,19 @@ class AlbumHandler(BaseHTTPRequestHandler):
                 else:
                     self.send_file(path)
             elif self.command == "POST":
-                if video_create:
+                if path == '/api/initialize':
+                    if target.query:
+                        raise ApiError(400, '初始化不接受额外参数。')
+                    from album_reset import reset
+                    result = reset(self.server, self.read_json(1024))
+                    clear_profile = getattr(self.server, 'clear_profile', None)
+                    if clear_profile is not None:
+                        try:
+                            clear_profile()
+                        except Exception:
+                            result['cleanup_pending'] = True
+                    self.send_json(200, result)
+                elif video_create:
                     self.send_json(202, {"job": self.server.video_jobs.start(video_create.group(1), self.read_json())})
                 elif path == "/api/settings":
                     self.send_json(200, store.update_settings(self.read_json()))

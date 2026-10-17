@@ -45,7 +45,7 @@
     if(!active()||host.isBusy()||model.loading||model.saving)return true;
     if(action==='settings-opening-remove'){model.pending=target.dataset.id;redraw();document.querySelector('.opening-line-confirm [data-action="settings-opening-keep"]')?.focus({preventScroll:true});}
     if(action==='settings-opening-keep'){model.pending=null;redraw();}
-    if(action==='settings-opening-delete')await mutate('/api/opening-lines/'+encodeURIComponent(target.dataset.id),{method:'DELETE'});
+    if(action==='settings-opening-delete'&&model.pending===target.dataset.id)await mutate('/api/opening-lines/'+encodeURIComponent(target.dataset.id),{method:'DELETE'});
     if(action==='settings-opening-retry')await load();
     return true;
   }

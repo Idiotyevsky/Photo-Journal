@@ -66,6 +66,7 @@
     return Boolean(document.querySelector('#modal-root [role="dialog"][aria-modal="true"], dialog[open]'));
   }
   function onKeyDown(event){
+    if(window.ShiguangConfirm?.isOpen())return;
     if(event.defaultPrevented||event.isComposing||event.keyCode===229)return;
     if(event.key==='F11'){
       event.preventDefault();event.stopImmediatePropagation();

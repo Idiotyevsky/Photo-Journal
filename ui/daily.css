@@ -66,3 +66,7 @@ html[data-theme="italian"] .daily-note p { color: #77734f; }
   .daily-opening-screen { transition: none; }
   .daily-opening-content, .daily-loading-line::after { animation: none; }
 }
+.confirm-overlay{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(34,39,39,.28);backdrop-filter:blur(4px)}
+.confirm-card{width:min(470px,100%);padding:30px;border:1px solid var(--line,#ddd7cc);border-radius:16px;background:var(--paper,#faf7f0);box-shadow:0 20px 75px #282a2826;color:var(--ink,#384b5a)}
+.confirm-card h2{margin:0 0 16px;font-size:23px}.confirm-card p{margin:0;line-height:1.9;white-space:pre-line}.confirm-card>div{display:flex;justify-content:flex-end;gap:12px;margin-top:26px}
+.settings-data-panel{padding:8px 0 16px;line-height:1.9}.settings-data-panel h3{margin:10px 0;font-size:25px}.settings-data-panel p{color:var(--muted,#787c7a)}.settings-data-panel ul{padding-left:22px;margin:20px 0}.settings-initialize-box{display:grid;grid-template-columns:1fr auto;gap:14px;margin-top:28px;padding-top:24px;border-top:1px solid var(--line,#ddd7cc)}.settings-initialize-box label,.settings-initialize-box p{grid-column:1/-1}.settings-initialize-box input{min-width:0}.settings-initialize-box p:empty{display:none}

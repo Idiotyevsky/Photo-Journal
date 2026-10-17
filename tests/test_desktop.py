@@ -112,6 +112,7 @@ class DesktopTests(unittest.TestCase):
             data_dir = Path(directory)
             window = FakeWindow()
             origin = "http://127.0.0.1:9999"
+            window.native.WindowState = 'Maximized'
             controller = desktop.DesktopController(window, data_dir, origin, data_dir / "report.json")
             payload = {"heading": "我的摄影集", "heading_visible": True, "photo_count": 0,
                        "journal_count": 0, "collection_count": 0, "origin": origin,
@@ -137,6 +138,7 @@ class DesktopTests(unittest.TestCase):
             self.assertTrue(result["ok"])
             self.assertEqual(result["renderer"], "edgechromium")
             self.assertTrue(result["native_title_empty"])
+            self.assertTrue(result['native_maximized'])
             self.assertTrue(result["native_fullscreen"]["entered"]["fullscreen"])
             self.assertFalse(result["native_fullscreen"]["final"]["fullscreen"])
             self.assertEqual(window.toggle_fullscreen.call_count, 2)

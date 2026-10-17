@@ -764,8 +764,10 @@
     if(name==='save-assignment') {await saveAssignment();return;}
     if(name==='remove-selected') {
       const collection=currentCollection();if(!collection||!state.selectedIds.size)return;
+      const photoIds=[...state.selectedIds];
+      if(!await window.ShiguangConfirm?.ask({title:`移出这 ${photoIds.length} 张照片？`,message:'这些照片会从当前作品集中移出，全部照片中的原图仍会保留。',label:'移出作品集'}))return;
       target.disabled=true;
-      try{const result=await api(`/api/collections/${encodeURIComponent(collection.id)}/photos`,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({photo_ids:[...state.selectedIds]})});storeCollection(result.collection);clearSelection();render();toast(`已从作品集移出 ${result.removed_count} 张，全部照片中的原图仍保留。`);}finally{if(target.isConnected)target.disabled=false;}
+      try{const result=await api(`/api/collections/${encodeURIComponent(collection.id)}/photos`,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({photo_ids:photoIds})});storeCollection(result.collection);clearSelection();render();toast(`已从作品集移出 ${result.removed_count} 张，全部照片中的原图仍保留。`);}finally{if(target.isConnected)target.disabled=false;}
       return;
     }
     if(name==='set-collection-cover') {
@@ -779,7 +781,7 @@
       return;
     }
     if(name==='choose-folder'){document.getElementById('photo-folder').click();return;}
-    if(name==='clear-files'){captureImportDraft();state.files=[];state.importResults=[];state.importProgress=0;state.importDone=false;state.skippedFiles=0;renderModal();return;}
+    if(name==='clear-files'){if(!await window.ShiguangConfirm?.ask({title:'清空待导入列表？',message:'只清空这次选择的列表，不会删除任何文件。',label:'清空列表'}))return;captureImportDraft();state.files=[];state.importResults=[];state.importProgress=0;state.importDone=false;state.skippedFiles=0;renderModal();return;}
     if(name==='collections-home'){state.view='collections';state.scope=null;state.search='';state.layout='grid';clearSelection();render();return;}
     if(name==='browse-photos'){state.view='photos';state.scope=null;state.search='';state.layout='grid';clearSelection();render();return;}
     if (name === 'nav' || name === 'home') {
@@ -869,6 +871,7 @@
   });
   document.addEventListener('submit', event=>{event.preventDefault();if(event.target.id==='collection-form')Promise.resolve(saveCollection()).catch(error=>toast(error.message,'error'));});
   document.addEventListener('keydown', event => {
+    if(window.ShiguangConfirm?.isOpen())return;
     if (!state.modal) return;
     if (event.key === 'Escape') {event.preventDefault();closeModal();return;}
     if (state.modal.type === 'lightbox' && !/INPUT|TEXTAREA|SELECT/.test(event.target.tagName)) {

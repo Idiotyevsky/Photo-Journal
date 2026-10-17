@@ -26,25 +26,48 @@
     const disabled=current.busy||model.importing;
     return `<section class="settings-backup-panel"><p class="settings-backup-summary">将程序和相册资料一起保存，换一台电脑继续使用。</p><ul class="settings-backup-contents"><li>照片原图与预览</li><li>导入的音乐</li><li>作品集、手记与足迹</li><li>收藏与偏好设置</li></ul><div class="settings-backup-actions"><a class="button primary settings-backup-download ${disabled?'is-disabled':''}" href="/api/backup" download aria-disabled="${Boolean(disabled)}" ${disabled?'tabindex="-1"':''}>${icon('download')} 导出完整迁移包</a></div><p class="settings-backup-hint">照片较多时，准备下载需要一些时间。请等下载完成后再关闭相册。</p><div class="settings-backup-restore"><h3>在另一台电脑打开</h3><p>完整解压 ZIP，打开其中的「拾光相册」文件夹，双击「拾光相册.exe」。</p></div></section>`;
   }
-  function panelMarkup(current){
-    return current.tab==='opening'?window.ShiguangOpeningManager.render():current.tab==='backup'?backupPanel(current):current.loading?'<div class="loading-state"><span class="spinner"></span></div>':current.error?`<div class="settings-error"><p>${esc(current.error)}</p><button class="button secondary" data-action="settings-retry">重新加载</button></div>`:current.tab==='audio'?audioPanel():`<div class="settings-theme-grid">${previewCard('classic','经典','暖白 · 蓝灰 · 旅行画册','/assets/european-sketch.png')}${previewCard('italian','意大利油画','暖金 · 陶土 · 托斯卡纳','/assets/italian-oil-vignette.png')}</div>`;
+  function dataPanel(){
+    return `<section class="settings-data-panel"><span class="eyebrow">A FRESH START</span><h3>一键初始化</h3><p>将相册恢复到初次打开的状态。</p><ul><li>清除相册中的照片副本、预览、收藏与编辑记录</li><li>清除作品集、旅行手记、足迹和导入的音乐</li><li>清除自定义开场白，恢复默认句库与设置</li></ul><p>保留程序、主题、内置地图和内置音乐。最初导入的源文件，以及已经另存的作品、视频和备份不受影响。</p><a class="inline-link settings-backup-download" href="/api/backup" download>先导出完整迁移包 ${icon('download')}</a><div class="settings-initialize-box"><label for="initialize-confirmation">此操作无法撤销。输入「清空相册」后继续。</label><input id="initialize-confirmation" type="text" autocomplete="off" placeholder="清空相册" maxlength="4"><button class="button danger" data-action="settings-initialize" disabled>${icon('trash')} 一键初始化</button><p id="initialize-status" role="status"></p></div></section>`;
   }
-  const panelKey=current=>current.tab==='opening'?'opening:ready':`${current.tab}:${current.loading?'loading':current.error?'error':'ready'}`;
+  async function initializeAlbum(){
+    const current=active(),field=document.getElementById('initialize-confirmation');
+    if(!current||current.busy||current.tab!=='data'||field?.value!=='清空相册')return;
+    current.busy=true;refresh();
+    try {
+      if(!await window.ShiguangConfirm?.ask({title:'确认清空整个相册？',message:'照片副本、导入音乐、作品集、手记、足迹和个人设置都将清除。清除后无法撤销，请确认已保存需要的备份。',label:'清空并初始化'}))return;
+      current.initializing=true;
+      const status=document.getElementById('initialize-status');if(status)status.textContent='正在初始化，请稍候…';
+      await Promise.all([volumeQueue.catch(()=>{}),trackQueue.catch(()=>{})]);
+      window.ShiguangOnlineMusic?.onClose();window.ShiguangMusic.stop();
+      const result=await host.api('/api/initialize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmation:'清空相册'})});
+      if(!result.initialized)throw new Error('初始化尚未完成，请重试。');
+      try{localStorage.clear();sessionStorage.clear();}catch(_error){}
+      if(result.cleanup_pending){if(status)status.textContent='资料已初始化，仍有部分缓存待清理。';host.toast('资料已初始化，仍有部分缓存待清理。');}
+      window.location.reload();
+    } catch(error) {
+      const status=document.getElementById('initialize-status');if(status)status.textContent=error.message;host.toast(error.message,'error');
+    } finally {current.initializing=false;current.busy=false;if(active()===current){refresh();field?.focus();}}
+  }
+  function panelMarkup(current){
+    return current.tab==='data'?dataPanel():current.tab==='opening'?window.ShiguangOpeningManager.render():current.tab==='backup'?backupPanel(current):current.loading?'<div class="loading-state"><span class="spinner"></span></div>':current.error?`<div class="settings-error"><p>${esc(current.error)}</p><button class="button secondary" data-action="settings-retry">重新加载</button></div>`:current.tab==='audio'?audioPanel():`<div class="settings-theme-grid">${previewCard('classic','经典','暖白 · 蓝灰 · 旅行画册','/assets/european-sketch.png')}${previewCard('italian','意大利油画','暖金 · 陶土 · 托斯卡纳','/assets/italian-oil-vignette.png')}</div>`;
+  }
+  const panelKey=current=>['opening','data'].includes(current.tab)?current.tab+':ready':`${current.tab}:${current.loading?'loading':current.error?'error':'ready'}`;
   function renderModal(current){
-    return host.modalFrame('设置','',`<div class="settings-tabs" role="group" aria-label="设置分类"><button class="settings-tab ${current.tab==='appearance'?'active':''}" data-action="settings-tab" data-tab="appearance" aria-pressed="${current.tab==='appearance'}" ${current.busy?'disabled':''}>外观主题</button><button class="settings-tab ${current.tab==='audio'?'active':''}" data-action="settings-tab" data-tab="audio" aria-pressed="${current.tab==='audio'}" ${current.busy?'disabled':''}>背景音乐</button><button class="settings-tab ${current.tab==='opening'?'active':''}" data-action="settings-tab" data-tab="opening" aria-pressed="${current.tab==='opening'}" ${current.busy?'disabled':''}>开场白管理</button><button class="settings-tab ${current.tab==='backup'?'active':''}" data-action="settings-tab" data-tab="backup" aria-pressed="${current.tab==='backup'}" ${current.busy?'disabled':''}>备份与迁移</button></div><div id="settings-panel" data-panel="${panelKey(current)}">${panelMarkup(current)}</div>`,`<button class="button primary" data-action="close-modal" ${current.busy?'disabled':''}>完成</button>`,`settings-modal${current.tab==='opening'?' opening-settings':''}`);
+    return host.modalFrame('设置','',`<div class="settings-tabs" role="group" aria-label="设置分类"><button class="settings-tab ${current.tab==='appearance'?'active':''}" data-action="settings-tab" data-tab="appearance" aria-pressed="${current.tab==='appearance'}" ${current.busy?'disabled':''}>外观主题</button><button class="settings-tab ${current.tab==='audio'?'active':''}" data-action="settings-tab" data-tab="audio" aria-pressed="${current.tab==='audio'}" ${current.busy?'disabled':''}>背景音乐</button><button class="settings-tab ${current.tab==='opening'?'active':''}" data-action="settings-tab" data-tab="opening" aria-pressed="${current.tab==='opening'}" ${current.busy?'disabled':''}>开场白管理</button><button class="settings-tab ${current.tab==='backup'?'active':''}" data-action="settings-tab" data-tab="backup" aria-pressed="${current.tab==='backup'}" ${current.busy?'disabled':''}>备份与迁移</button><button class="settings-tab ${current.tab==='data'?'active':''}" data-action="settings-tab" data-tab="data" aria-pressed="${current.tab==='data'}" ${current.busy?'disabled':''}>数据管理</button></div><div id="settings-panel" data-panel="${panelKey(current)}">${panelMarkup(current)}</div>`,`<button class="button primary" data-action="close-modal" ${current.busy?'disabled':''}>完成</button>`,`settings-modal${['opening','data'].includes(current.tab)?' opening-settings':''}`);
   }
   function refresh(){
     const current=active();if(!current)return;
     const panel=document.getElementById('settings-panel');
     if(!panel){host.renderModal();return;}
     const modal=panel.closest('.settings-modal'),scroll=modal.scrollTop,key=panelKey(current),changed=panel.dataset.panel!==key;
-    modal.classList.toggle('opening-settings',current.tab==='opening');
+    modal.classList.toggle('opening-settings',['opening','data'].includes(current.tab));
     if(changed){panel.innerHTML=panelMarkup(current);panel.dataset.panel=key;}
     modal.querySelectorAll('.settings-tab').forEach(button=>{
       const selected=button.dataset.tab===current.tab;button.classList.toggle('active',selected);button.setAttribute('aria-pressed',String(selected));button.disabled=Boolean(current.busy);
     });
     modal.querySelectorAll('[data-action="close-modal"]').forEach(button=>{button.disabled=Boolean(current.busy);});
     if(current.tab==='opening')window.ShiguangOpeningManager?.sync();
+    if(current.tab==='data'){const field=panel.querySelector('#initialize-confirmation');field.disabled=Boolean(current.busy);panel.querySelector('[data-action="settings-initialize"]').disabled=Boolean(current.busy)||field.value!=='清空相册';}
     if(current.tab==='audio'&&!current.loading&&!current.error){syncAudioPanel(panel);window.ShiguangOnlineMusic?.update();}
     if(current.tab==='appearance')modal.querySelectorAll('.theme-card').forEach(card=>{
       const selected=card.dataset.theme===model.theme;card.classList.toggle('is-selected',selected);card.disabled=Boolean(current.busy);
@@ -100,17 +123,18 @@
     if(action.startsWith('settings-opening-'))return window.ShiguangOpeningManager?.handleAction(action,target)??true;
     if(action.startsWith('settings-online-'))return window.ShiguangOnlineMusic?.handleAction(action,target)??true;
     if(action==='settings-open'){await open();return true;}if(!action.startsWith('settings-'))return false;const current=active();if(!current||current.busy)return true;
-    if(action==='settings-tab'){const tab=['audio','backup','opening'].includes(target.dataset.tab)?target.dataset.tab:'appearance';if(current.tab===tab)return true;window.ShiguangOnlineMusic?.onClose();window.ShiguangOpeningManager?.onClose();current.tab=tab;model.pendingRemove=null;refresh();if(tab==='opening')void window.ShiguangOpeningManager?.load();}
+    if(action==='settings-tab'){const tab=['audio','backup','opening','data'].includes(target.dataset.tab)?target.dataset.tab:'appearance';if(current.tab===tab)return true;window.ShiguangOnlineMusic?.onClose();window.ShiguangOpeningManager?.onClose();current.tab=tab;model.pendingRemove=null;refresh();if(tab==='opening')void window.ShiguangOpeningManager?.load();}
+    if(action==='settings-initialize')await initializeAlbum();
     if(action==='settings-theme')await setTheme(target.dataset.theme);
     if(action==='settings-preview'){window.ShiguangOnlineMusic?.stop();window.ShiguangMusic.previewTrack(target.dataset.id);}
     if(action==='settings-import')document.getElementById('settings-audio-files')?.click();
     if(action==='settings-remove'){model.pendingRemove=target.dataset.id;refresh();}
     if(action==='settings-remove-cancel'){model.pendingRemove=null;refresh();}
-    if(action==='settings-remove-confirm')await removeTrack(target.dataset.id);
+    if(action==='settings-remove-confirm'&&model.pendingRemove===target.dataset.id)await removeTrack(target.dataset.id);
     if(action==='settings-retry'){current.error='';current.loading=true;refresh();try{await initialize(true);}catch(error){current.error=error.message;}finally{current.loading=false;if(active()===current)refresh();}}
     return true;
   }
-  document.addEventListener('input',event=>{if(event.target.id==='settings-volume'){model.music_volume=Number(event.target.value)/100;window.ShiguangMusic.setVolume(model.music_volume);window.ShiguangOnlineMusic?.volumeChanged(model.music_volume);const output=document.getElementById('settings-volume-value');if(output)output.value=`${event.target.value}%`;}});
+  document.addEventListener('input',event=>{if(event.target.id==='initialize-confirmation'){const button=document.querySelector('[data-action="settings-initialize"]');if(button)button.disabled=Boolean(active()?.busy)||event.target.value!=='清空相册';}if(event.target.id==='settings-volume'){model.music_volume=Number(event.target.value)/100;window.ShiguangMusic.setVolume(model.music_volume);window.ShiguangOnlineMusic?.volumeChanged(model.music_volume);const output=document.getElementById('settings-volume-value');if(output)output.value=`${event.target.value}%`;}});
   document.addEventListener('click',event=>{
     const download=event.target.closest?.('.settings-backup-download');
     if(download&&(active()?.busy||model.importing||download.getAttribute('aria-disabled')==='true')){event.preventDefault();event.stopImmediatePropagation();}
@@ -123,5 +147,5 @@
     if(field.dataset.settingsTitle){const id=field.dataset.settingsTitle,title=field.value.trim();if(!title){field.value=model.tracks.find(track=>track.id===id)?.title||'';return;}updateTrack(id,{title}).catch(error=>{field.value=model.tracks.find(track=>track.id===id)?.title||'';host.toast(error.message,'error');});}
   });
   document.addEventListener('shiguangmusicchange',syncTrackRows);
-  window.ShiguangSettings={configure,initialize,renderModal,handleAction,isImporting:()=>model.importing,onClose:()=>{window.ShiguangOnlineMusic?.onClose();model.pendingRemove=null;window.ShiguangOpeningManager?.onClose();if(window.ShiguangMusic.current().preview)window.ShiguangMusic.stop();}};
+  window.ShiguangSettings={configure,initialize,renderModal,handleAction,isImporting:()=>model.importing||Boolean(active()?.initializing),onClose:()=>{window.ShiguangOnlineMusic?.onClose();model.pendingRemove=null;window.ShiguangOpeningManager?.onClose();if(window.ShiguangMusic.current().preview)window.ShiguangMusic.stop();}};
 })();

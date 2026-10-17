@@ -95,11 +95,11 @@ const source=fs.readFileSync('ui/atlas-art.js','utf8')+'\n'+fs.readFileSync('ui/
 async function setup(stored={stops:[],updated_at:null}){
  const events={},state={modal:null},posts=[],maps=[],zoomControls=[];
  const document={addEventListener:(name,fn)=>(events[name]??=[]).push(fn),getElementById:()=>null,querySelector:()=>null,querySelectorAll:selector=>selector==='svg.atlas-svg'?maps:selector==='[data-atlas-zoom-controls]'?zoomControls:[]};
- const window={innerWidth:1188};
+ const window={innerWidth:1188,ShiguangConfirm:{ask:async()=>false}};
  vm.runInNewContext(source,{window,document,console,setTimeout:fn=>fn(),crypto:require('node:crypto').webcrypto});
  const atlas=window.ShiguangAtlas;
  atlas.configure({getState:()=>state,redraw:()=>{},api:async(path,options)=>{if(path==='/api/atlas'){if(options){const data=JSON.parse(options.body);posts.push(data);return {...data,updated_at:'2026-10-15'};}return stored;}return JSON.parse(fs.readFileSync('ui'+path,'utf8'));},showModal:(type,props)=>state.modal={type,...props},renderModal:()=>{},modalFrame:(_title,_desc,body)=>body,closeModal:()=>state.modal=null,toast:()=>{},icon:()=>'',openPlace:()=>{},openCountry:()=>{}});
- await atlas.loadCountries();return {atlas,events,state,posts,maps,zoomControls};
+ await atlas.loadCountries();return {atlas,events,state,posts,maps,zoomControls,window};
 }
  const s=await setup();
  const photos=[{id:'a',place:'扬州',taken_at:'2025-01-01',country:'CN'},{id:'b',place:'北京',taken_at:'2025-01-02',country:'CN'},{id:'c',place:'巴黎',taken_at:'2025-01-03',country:'FR'},{id:'d',place:'伦敦',taken_at:'2025-01-04',country:'GB'}];
@@ -108,6 +108,7 @@ async function setup(stored={stops:[],updated_at:null}){
  await s.atlas.handleAction('atlas-view',{dataset:{scope:'world'}});html=s.atlas.render(photos);assert.equal(pins(html),3);assert.equal(lines(html),2);assert.ok(html.includes('data-atlas-id="country_CN"'));assert.ok(html.includes('世界 · 国家足迹'));
  await s.atlas.handleAction('atlas-select',{dataset:{atlasId:'country_CN'}});html=s.atlas.render(photos);assert.ok(html.includes('2 座城市'));assert.ok(html.includes('扬州 · 北京'));assert.ok(html.includes('atlas-open-country'));
  await s.atlas.handleAction('atlas-edit',{dataset:{}});html=s.atlas.renderModal(s.state.modal);assert.ok(html.includes('>国家</label>'));assert.ok(html.includes('>城市 '));assert.equal(s.state.modal.draft[0].country,'CN');assert.equal(s.state.modal.draft[0].city,'扬州');
+ const beforeRemove=s.state.modal.draft.length,firstStop=s.state.modal.draft[0];await s.atlas.handleAction('atlas-remove',{dataset:{atlasIndex:'0'}});assert.equal(s.state.modal.draft.length,beforeRemove,'cancel keeps the route draft');s.window.ShiguangConfirm.ask=async()=>true;await s.atlas.handleAction('atlas-remove',{dataset:{atlasIndex:'1'}});assert.equal(s.state.modal.draft.length,beforeRemove-1);assert.equal(s.state.modal.draft[0],firstStop,'deletion preserves the other route stops');
  const stop=s.state.modal.draft[0];s.events.input[0]({target:{dataset:{atlasField:'city',atlasId:stop.id},value:'北京'}});assert.equal(stop.name,'北京');assert.ok(stop.lat>39&&stop.lat<41);
  s.events.input[0]({target:{dataset:{atlasField:'country',atlasId:stop.id},value:'FR'}});assert.equal(stop.city,'');assert.equal(stop.name,'法国');assert.equal(stop.lat,s.atlas.countries().find(c=>c.code==='FR').lat);
  await s.atlas.handleAction('atlas-save',{dataset:{}});assert.equal(s.posts[0].stops[0].country,'FR');assert.equal(s.posts[0].stops[0].city,'');

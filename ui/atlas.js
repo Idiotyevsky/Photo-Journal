@@ -505,7 +505,12 @@
       if(stop&&coordinates(element.dataset.lat,element.dataset.lon)){stop.country=element.dataset.country||stop.country;stop.city=element.dataset.city||stop.city;stop.name=stop.city||countryInfo(stop.country)?.name||stop.name;setCoordinates(stop,element.dataset.lat,element.dataset.lon);active.selectedId=stop.id;active.picking=false;host.renderModal();focusStop(stop.id);}return true;
     }
     const index=Number(element.dataset.atlasIndex);if(!Number.isInteger(index)||index<0||index>=active.draft.length)return true;
-    if(action==='atlas-remove'){active.draft.splice(index,1);if(!active.draft.some(stop=>stop.id===active.selectedId)){active.selectedId=active.draft[Math.min(index,active.draft.length-1)]?.id||null;active.picking=false;}host.renderModal();return true;}
+    if(action==='atlas-remove'){
+      const stop=active.draft[index];
+      if(!await window.ShiguangConfirm?.ask({title:'删除这个足迹地点？',message:`「${stop.city||stop.name||'未命名地点'}」会从路线中移除，关联照片仍会保留。`,label:'删除地点'}))return true;
+      if(modal()!==active||active.draft[index]!==stop)return true;
+      active.draft.splice(index,1);if(!active.draft.some(stop=>stop.id===active.selectedId)){active.selectedId=active.draft[Math.min(index,active.draft.length-1)]?.id||null;active.picking=false;}host.renderModal();return true;
+    }
     const next=action==='atlas-up'?index-1:action==='atlas-down'?index+1:index;
     if(next>=0&&next<active.draft.length&&next!==index){[active.draft[index],active.draft[next]]=[active.draft[next],active.draft[index]];host.renderModal();focusStop(active.draft[next].id);}
     return true;
