@@ -1328,19 +1328,24 @@ class AlbumTests(unittest.TestCase):
         self.assertEqual(headers['Cache-Control'], 'no-store')
         prefix = 'window.ShiguangDailyQuotes=Object.freeze('
         script = body.decode('utf-8'); self.assertTrue(script.startswith(prefix))
-        self.assertEqual(json.loads(script[len(prefix):-2]), [line['text'] for line in current['lines']])
+        self.assertEqual(json.loads(script.splitlines()[0][len(prefix):-2]), [line['text'] for line in current['lines']])
+        daily = self.request('GET', '/api/opening-daily')[1]['selection']
+        self.assertEqual(json.loads(script.splitlines()[1][len('window.ShiguangDailySelection=Object.freeze('):-2]), daily)
         self.assertEqual(self.request('GET', '/api/export')[1]['opening_lines'], current['lines'])
         with self.server.store.backup_archive(self.application_file) as path:
             with zipfile.ZipFile(path) as archive:
                 directory = self.root/'migrated-opening'; directory.mkdir()
                 (directory/'album.sqlite3').write_bytes(archive.read('拾光相册/album-data/album.sqlite3'))
         self.assertEqual(server.AlbumStore(directory).opening_lines(), current)
+        self.assertEqual(server.AlbumStore(directory).daily_opening(), daily)
+        self.assertEqual(self.request('GET', '/api/export')[1]['opening_rotation'], self.server.store.opening_rotation())
         self.assertEqual(self.request('DELETE', '/api/opening-lines/'+custom['id'])[0], 200)
         self.assertEqual(self.request('DELETE', '/api/opening-lines/'+custom['id'])[0], 404)
         with self.server.store.connect() as db:
             self.server.store.save_opening_lines(db, [])
         self.assertEqual(server.AlbumStore(self.server.store.root).opening_lines(), {'lines': []})
-        self.assertEqual(self.file_response('/daily-quotes.js')[2], b'window.ShiguangDailyQuotes=Object.freeze([]);')
+        self.assertTrue(self.file_response('/daily-quotes.js')[2].startswith(b'window.ShiguangDailyQuotes=Object.freeze([]);'))
+        self.assertEqual(self.request('GET', '/api/opening-daily')[1]['selection']['text'], '')
 
     def test_opening_line_validation_security_and_failed_commit_are_atomic(self):
         original = self.server.store.opening_lines()
@@ -1348,7 +1353,7 @@ class AlbumTests(unittest.TestCase):
             with self.subTest(value=value):
                 self.assertEqual(self.json_request('POST', '/api/opening-lines', value)[0], 400)
                 self.assertEqual(self.server.store.opening_lines(), original)
-        for path in ('/api/opening-lines', '/daily-quotes.js'):
+        for path in ('/api/opening-lines', '/daily-quotes.js', '/api/opening-daily'):
             self.assertEqual(self.request('GET', path, headers={'Sec-Fetch-Site': 'cross-site'})[0], 403)
         self.assertEqual(self.request('POST', '/api/opening-lines', json.dumps({'text': '不应写入'}).encode(), headers={'Origin': 'https://outside.example', 'Content-Type': 'application/json'})[0], 403)
         self.assertEqual(self.request('DELETE', '/api/opening-lines/'+original['lines'][0]['id'], headers={'Sec-Fetch-Site': 'cross-site'})[0], 403)

@@ -482,6 +482,30 @@ class AlbumStore:
             return {'lines': self.opening_lines_record(db)}
 
     @staticmethod
+    def opening_rotation_record(db):
+        row = db.execute("SELECT value_json FROM app_settings WHERE key='opening-rotation'").fetchone()
+        try:
+            return json.loads(row['value_json']) if row else None
+        except (ValueError, TypeError):
+            raise ApiError(500, '开场白抽取记录暂时无法读取，请保留相册资料后重试。') from None
+
+    def opening_rotation(self):
+        with self.lock, self.connect() as db:
+            return self.opening_rotation_record(db)
+
+    def daily_opening(self):
+        from opening_rotation import choose
+        with self.lock, self.connect() as db:
+            stored = self.opening_rotation_record(db)
+            try:
+                selection, state = choose(self.opening_lines_record(db), stored, datetime.now().date().isoformat())
+            except (ValueError, TypeError, KeyError):
+                raise ApiError(500, '开场白抽取记录暂时无法读取，请保留相册资料后重试。') from None
+            if state != stored:
+                db.execute("INSERT INTO app_settings(key,value_json) VALUES('opening-rotation',?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json", (json.dumps(state),))
+            return selection
+
+    @staticmethod
     def save_opening_lines(db, lines):
         db.execute("INSERT INTO app_settings(key,value_json) VALUES('opening-lines',?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json", (json.dumps(lines, ensure_ascii=False),))
 
@@ -1291,7 +1315,7 @@ class AlbumHandler(BaseHTTPRequestHandler):
             video_create = re.fullmatch(r"/api/collections/([a-f0-9]{32})/video", path)
             video_preview = re.fullmatch(r"/api/collections/([a-f0-9]{32})/video-preview", path)
             video_job = re.fullmatch(r"/api/video-jobs/([a-f0-9]{32})(/file)?", path)
-            self.security_check(require_same_origin=path in {"/api/backup", "/api/colors", "/daily-quotes.js", "/api/initialize"} or path.startswith(("/api/music/online/", "/api/opening-lines")) or any(item is not None for item in (framed, video_create, video_preview, video_job)))
+            self.security_check(require_same_origin=path in {"/api/backup", "/api/colors", "/daily-quotes.js", "/api/initialize", "/api/opening-daily"} or path.startswith(("/api/music/online/", "/api/opening-lines")) or any(item is not None for item in (framed, video_create, video_preview, video_job)))
             query = parse_qs(target.query, keep_blank_values=True)
             store = self.server.store
             if self.command in {"GET", "HEAD"}:
@@ -1315,8 +1339,12 @@ class AlbumHandler(BaseHTTPRequestHandler):
                     if query:
                         raise ApiError(400, '开场白列表不需要额外参数。')
                     self.send_json(200, store.opening_lines())
+                elif path == '/api/opening-daily':
+                    if query:
+                        raise ApiError(400, '每日开场白不需要额外参数。')
+                    self.send_json(200, {'selection': store.daily_opening()})
                 elif path == '/daily-quotes.js':
-                    data = ('window.ShiguangDailyQuotes=Object.freeze(' + json.dumps([line['text'] for line in store.opening_lines()['lines']]) + ');').encode('utf-8')
+                    data = ('window.ShiguangDailyQuotes=Object.freeze(' + json.dumps([line['text'] for line in store.opening_lines()['lines']]) + ');\nwindow.ShiguangDailySelection=Object.freeze(' + json.dumps(store.daily_opening()) + ');').encode('utf-8')
                     self.send_response(200)
                     self.send_header('Content-Type', 'application/javascript; charset=utf-8')
                     self.send_header('Cache-Control', 'no-store')
@@ -1345,7 +1373,7 @@ class AlbumHandler(BaseHTTPRequestHandler):
                 elif re.fullmatch(r"/api/collections/[a-f0-9]{32}/route", path):
                     self.send_json(200, store.get_route(path.split("/")[3]))
                 elif path == "/api/export":
-                    self.send_json(200, {"version": 1, "exported_at": now(), **store.photos(), **store.journals(), **store.collections(), "atlas": store.atlas(), "settings": store.settings(), "music": store.music(), "opening_lines": store.opening_lines()['lines']}, attachment="相册资料.json")
+                    self.send_json(200, {"version": 1, "exported_at": now(), **store.photos(), **store.journals(), **store.collections(), "atlas": store.atlas(), "settings": store.settings(), "music": store.music(), "opening_lines": store.opening_lines()['lines'], "opening_rotation": store.opening_rotation()}, attachment="相册资料.json")
                 elif path == "/api/backup":
                     self.send_backup()
                 elif framed:

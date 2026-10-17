@@ -5,22 +5,36 @@
   const weekdays=['星期日','星期一','星期二','星期三','星期四','星期五','星期六'];
   const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   let host=null,started=false,finished=false,closing=false,startedAt=0,dismissTimer=null,dayKey='';
+  let selection=window.ShiguangDailySelection||null,request=null,version=0,pendingRefresh=false;
   function forDate(date=new Date()){
-    const y=date.getFullYear(),m=date.getMonth(),d=date.getDate(),quotes=window.ShiguangDailyQuotes||[];
-    // A civil-day index avoids daylight-saving and changing localhost ports.
-    const index=quotes.length?((Math.floor(Date.UTC(y,m,d)/86400000)%quotes.length)+quotes.length)%quotes.length:-1;
-    return {key:`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`,date:`${y}.${String(m+1).padStart(2,'0')}.${String(d).padStart(2,'0')}`,weekday:weekdays[date.getDay()],quote:index<0?'':quotes[index]};
+    const y=date.getFullYear(),m=date.getMonth(),d=date.getDate();
+    return {key:`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`,date:`${y}.${String(m+1).padStart(2,'0')}.${String(d).padStart(2,'0')}`,weekday:weekdays[date.getDay()],quote:selection?.text||''};
   }
   function renderCorner(){
     const daily=forDate();
     return `<section class="daily-note" aria-label="今日一语"><time datetime="${daily.key}">${daily.date}<span>${daily.weekday}</span></time>${daily.quote?`<p title="${esc(daily.quote)}">${esc(daily.quote)}</p>`:''}</section>`;
   }
   function updateDay(force=false){
-    const daily=forDate();if(!force&&daily.key===dayKey)return;dayKey=daily.key;
+    const daily=forDate();if(pendingRefresh||selection?.key!==daily.key)void refreshSelection();if(!force&&daily.key===dayKey)return;dayKey=daily.key;
     document.querySelectorAll('.daily-note').forEach(note=>{const fragment=document.createElement('div');fragment.innerHTML=renderCorner();note.innerHTML=fragment.firstElementChild.innerHTML;});
     const quote=document.getElementById('daily-opening-quote'),date=document.getElementById('daily-opening-date');
     if(quote){quote.textContent=daily.quote;quote.classList?.toggle('is-long',daily.quote.length>45);}
     if(date){date.dateTime=daily.key;date.textContent=`${daily.date} · ${daily.weekday}`;}
+  }
+  async function refreshSelection(force=false){
+    if(request&&!force)return request;
+    pendingRefresh=true;
+    const current=++version;
+    request=(async()=>{
+      try{
+        const response=await fetch('/api/opening-daily',{cache:'no-store'}),data=await response.json();
+        if(!response.ok)throw new Error(data.error||'开场白暂时无法读取。');
+        if(current!==version)return;
+        if(!data.selection||typeof data.selection.key!=='string'||typeof data.selection.text!=='string')throw new Error('开场白格式不正确。');
+        selection=data.selection;pendingRefresh=false;window.ShiguangDailySelection=Object.freeze({...selection});updateDay(true);
+      }catch(_error){}finally{if(current===version)request=null;}
+    })();
+    return request;
   }
   function finish(){
     if(finished||closing)return;closing=true;clearTimeout(dismissTimer);
@@ -44,8 +58,8 @@
     updateDay();dismissTimer=setTimeout(finish,MAXIMUM);
     setInterval(updateDay,30000);
     document.addEventListener('visibilitychange',()=>{if(!document.hidden)updateDay();});
-    window.addEventListener('focus',updateDay);
+    window.addEventListener('focus',()=>updateDay());
   }
-  function setLines(lines){window.ShiguangDailyQuotes=Object.freeze(lines.map(line=>line.text));updateDay(true);}
+  function setLines(lines){window.ShiguangDailyQuotes=Object.freeze(lines.map(line=>line.text));if(!lines.some(line=>line.text===selection?.text))selection={key:forDate().key,id:null,text:''};updateDay(true);void refreshSelection(true);}
   window.ShiguangDaily={configure,ready,renderCorner,forDate,setLines};
 })();
