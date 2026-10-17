@@ -542,7 +542,7 @@ def main(argv: list[str] | None = None) -> int:
         window = webview.create_window(
             TITLE, origin + "/?desktop=1", width=1440, height=960, min_size=(1000, 720),
             resizable=True, frameless=False, confirm_close=False,
-            background_color="#f8f9f6", text_select=True,
+            background_color="#f7f3ea", text_select=True,
             fullscreen=False, js_api=fullscreen_api,
         )
         if window is None:

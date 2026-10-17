@@ -1,0 +1,33 @@
+body.daily-opening { overflow: hidden; background: #f7f3ea; }
+body.daily-opening #app { visibility: hidden; }
+.daily-opening-screen { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 56px 40px 100px; background: #f7f3ea; color: #46514e; opacity: 1; transition: opacity .38s ease; }
+.daily-opening-screen.is-leaving { opacity: 0; pointer-events: none; }
+.daily-opening-content { display: flex; flex-direction: column; align-items: center; width: min(100%, 720px); margin-top: -12px; text-align: center; animation: daily-arrive .7s ease both; }
+.daily-opening-mark { width: 78px; height: 78px; margin-bottom: 43px; }
+.daily-opening-mark svg { width: 100%; height: 100%; stroke: #68746a; stroke-width: 1; }
+#daily-opening-quote { max-width: 680px; font-family: var(--sans); font-size: clamp(23px, 2.5vw, 32px); font-weight: 600; letter-spacing: .07em; line-height: 1.9; text-wrap: balance; }
+#daily-opening-date { display: block; margin-top: 31px; color: #8b887c; font-family: var(--roman), var(--sans); font-size: 12px; font-weight: 400; letter-spacing: .14em; }
+.daily-opening-loading { position: absolute; bottom: 43px; left: 50%; transform: translateX(-50%); display: grid; justify-items: center; gap: 13px; color: #9b9789; font-family: var(--sans); font-size: 12px; letter-spacing: .12em; }
+.daily-loading-line { position: relative; display: block; width: 52px; height: 1px; overflow: hidden; background: #ddd7c9; }
+.daily-loading-line::after { position: absolute; inset: 0; content: ''; background: #8f9a8b; animation: daily-loading 1.8s ease-in-out infinite; transform-origin: left; }
+.daily-note { margin: 0 0 23px; padding-top: 21px; border-top: 1px solid var(--rule); }
+.daily-note time { display: flex; flex-wrap: wrap; gap: 5px 10px; color: #807e73; font-family: var(--roman), var(--sans); font-size: 11px; font-weight: 400; letter-spacing: .045em; }
+.daily-note time span { font-family: var(--sans); letter-spacing: 0; }
+.daily-note p { margin-top: 10px; color: #69736b; font-family: var(--sans); font-size: 13px; font-weight: 600; letter-spacing: .025em; line-height: 1.9; overflow-wrap: anywhere; }
+html[data-theme="italian"] .daily-note p { color: #77734f; }
+@keyframes daily-arrive { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes daily-loading { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+@media (max-width: 760px) {
+  .daily-opening-screen { padding: 35px 28px 90px; }
+  .daily-opening-mark { width: 64px; height: 64px; margin-bottom: 32px; }
+  .sidebar-bottom { display: block; margin-top: 0; padding: 0 0 10px; }
+  .sidebar-bottom > .inline-link { display: none; }
+  .daily-note { display: flex; align-items: baseline; gap: 15px; margin: 0; padding-top: 11px; }
+  .daily-note time { flex-shrink: 0; }
+  .daily-note time span { display: none; }
+  .daily-note p { margin: 0; font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .daily-opening-screen { transition: none; }
+  .daily-opening-content, .daily-loading-line::after { animation: none; }
+}

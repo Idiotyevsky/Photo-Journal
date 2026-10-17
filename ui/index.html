@@ -10,6 +10,9 @@
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/colors.css" />
     <link rel="stylesheet" href="/collection-order.css" />
+    <link rel="stylesheet" href="/daily.css" />
+    <script src="/daily-quotes.js" defer></script>
+    <script src="/daily.js" defer></script>
     <script src="/fullscreen.js" defer></script>
     <script src="/music.js" defer></script>
     <script src="/online-music.js" defer></script>
@@ -22,7 +25,8 @@
     <script src="/photo-menu.js" defer></script>
     <script src="/app.js" defer></script>
   </head>
-  <body>
+  <body class="daily-opening">
+    <div id="daily-opening" class="daily-opening-screen" aria-label="每日一语开场"></div>
     <div id="app"></div>
     <div id="modal-root"></div>
     <div id="toast-root" aria-live="polite" aria-atomic="false"></div>
