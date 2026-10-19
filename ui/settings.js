@@ -2,13 +2,13 @@
 (() => {
   'use strict';
   const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const THEMES=['classic','italian'];
+  const THEMES=['classic','italian','greek'];
   const model={theme:'classic',music_volume:.22,tracks:[],loaded:false,promise:null,importing:false,progress:'',pendingRemove:null};
   let host=null,volumeQueue=Promise.resolve(),trackQueue=Promise.resolve();
   const active=()=>host?.getState().modal?.type==='settings'?host.getState().modal:null;
   const icon=name=>host?.icon(name)||'';
   const playIcon=playing=>`<svg class="icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${playing?'<path d="M7 5h4v14H7zm6 0h4v14h-4z"/>':'<path d="m8 4 13 8-13 8z"/>'}</svg>`;
-  function applyTheme(theme){model.theme=THEMES.includes(theme)?theme:'classic';document.documentElement.dataset.theme=model.theme;const meta=document.querySelector('meta[name="theme-color"]');if(meta)meta.content=model.theme==='italian'?'#f3e9d7':'#f5f3ef';}
+  function applyTheme(theme){model.theme=THEMES.includes(theme)?theme:'classic';document.documentElement.dataset.theme=model.theme;const meta=document.querySelector('meta[name="theme-color"]');if(meta)meta.content=({classic:'#f5f3ef',italian:'#f3e9d7',greek:'#fafbf8'})[model.theme];}
   function configure(context){host=context;window.ShiguangOpeningManager?.configure({getState:host.getState,api:host.api,icon:host.icon,toast:host.toast,redraw:refresh,isBusy:()=>model.importing||Boolean(active()?.busy)});window.ShiguangOnlineMusic?.configure({getState:host.getState,api:host.api,redraw:refresh,toast:host.toast,isBusy:()=>model.importing||Boolean(active()?.busy),hasTrack:id=>model.tracks.some(track=>track.id===id),volume:()=>model.music_volume,setImporting:(value,message)=>{model.importing=value;model.progress=message;if(active())active().busy=value;},imported:async()=>{model.tracks=await window.ShiguangMusic.load(true);}});}
   async function initialize(force=false){
     if(model.promise)return model.promise;if(model.loaded&&!force)return;
@@ -49,7 +49,7 @@
     } finally {current.initializing=false;current.busy=false;if(active()===current){refresh();field?.focus();}}
   }
   function panelMarkup(current){
-    return current.tab==='data'?dataPanel():current.tab==='opening'?window.ShiguangOpeningManager.render():current.tab==='backup'?backupPanel(current):current.loading?'<div class="loading-state"><span class="spinner"></span></div>':current.error?`<div class="settings-error"><p>${esc(current.error)}</p><button class="button secondary" data-action="settings-retry">重新加载</button></div>`:current.tab==='audio'?audioPanel():`<div class="settings-theme-grid">${previewCard('classic','经典','暖白 · 蓝灰 · 旅行画册','/assets/european-sketch.png')}${previewCard('italian','意大利油画','暖金 · 陶土 · 托斯卡纳','/assets/italian-oil-vignette.png')}</div>`;
+    return current.tab==='data'?dataPanel():current.tab==='opening'?window.ShiguangOpeningManager.render():current.tab==='backup'?backupPanel(current):current.loading?'<div class="loading-state"><span class="spinner"></span></div>':current.error?`<div class="settings-error"><p>${esc(current.error)}</p><button class="button secondary" data-action="settings-retry">重新加载</button></div>`:current.tab==='audio'?audioPanel():`<div class="settings-theme-grid">${previewCard('classic','经典','暖白 · 蓝灰 · 旅行画册','/assets/european-sketch.png')}${previewCard('italian','意大利油画','暖金 · 陶土 · 托斯卡纳','/assets/italian-oil-vignette.png')}${previewCard('greek','希腊','爱琴海蓝白 · 陶砖回纹 · 橄榄枝','/assets/greek-coast.svg')}</div>`;
   }
   const panelKey=current=>['opening','data'].includes(current.tab)?current.tab+':ready':`${current.tab}:${current.loading?'loading':current.error?'error':'ready'}`;
   function renderModal(current){

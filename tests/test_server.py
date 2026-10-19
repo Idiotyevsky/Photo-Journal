@@ -1392,6 +1392,27 @@ class AlbumTests(unittest.TestCase):
         self.assertEqual(self.json_request("POST", "/api/settings", {"music_volume": 0})[1], {"theme": "italian", "music_volume": 0})
         self.assertEqual(self.request("GET", "/api/export")[1]["settings"], {"theme": "italian", "music_volume": 0})
 
+    def test_greek_theme_preserves_library_and_survives_restart_and_migration(self):
+        self.import_image()
+        self.create_collection("主题切换保留作品集")
+        before = self.request("GET", "/api/export")[1]
+        for theme in ("greek", "classic", "italian", "greek"):
+            status, settings = self.json_request("POST", "/api/settings", {"theme": theme})
+            self.assertEqual(status, 200)
+            self.assertEqual(settings, {"theme": theme, "music_volume": 0.22})
+            self.assertEqual(server.AlbumStore(self.server.store.root).settings(), settings)
+        after = self.request("GET", "/api/export")[1]
+        for key in before.keys() - {"settings", "exported_at"}:
+            self.assertEqual(after[key], before[key], key)
+        self.assertEqual(after["settings"]["theme"], "greek")
+        status, data = self.request("GET", "/api/backup")
+        self.assertEqual(status, 200)
+        migrated = self.root / "migrated-theme"
+        migrated.mkdir()
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            (migrated / "album.sqlite3").write_bytes(archive.read("拾光相册/album-data/album.sqlite3"))
+        self.assertEqual(server.AlbumStore(migrated).settings(), settings)
+
     def test_music_import_dedupe_rename_disable_remove_and_restore(self):
         data = self.wav_audio()
         status, imported = self.import_audio(data, "午后.wav")

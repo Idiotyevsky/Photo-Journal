@@ -1,4 +1,25 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+/* All appearance choices persist through the same settings lifecycle. */
+(async()=>{
+  const state={modal:{type:'settings',tab:'appearance'}},meta={},requests=[];let fail=false,renderCount=0;
+  const document={documentElement:{dataset:{}},querySelector:()=>meta,getElementById:()=>null,addEventListener(){}};
+  const window={ShiguangMusic:{load:async()=>[],setVolume(){}}};
+  vm.runInNewContext(fs.readFileSync('ui/settings.js','utf8'),{window,document,console});
+  const settings=window.ShiguangSettings;
+  settings.configure({getState:()=>state,renderModal(){renderCount++;},icon:()=>'',modalFrame:(_title,_hint,body)=>body,api:async(path,options)=>{
+    requests.push({path,options});if(fail)throw new Error('保存失败');return options?JSON.parse(options.body):{theme:'greek',music_volume:.22};
+  }});
+  await settings.initialize();assert.equal(document.documentElement.dataset.theme,'greek');assert.equal(meta.content,'#fafbf8');
+  const markup=settings.renderModal(state.modal);for(const theme of ['classic','italian','greek'])assert(markup.includes(`data-theme="${theme}"`));
+  for(const theme of ['classic','italian','greek']){
+    await settings.handleAction('settings-theme',{dataset:{theme}});assert.equal(document.documentElement.dataset.theme,theme);
+    assert.equal(JSON.parse(requests.at(-1).options.body).theme,theme);assert(!state.modal.busy);
+  }
+  const count=requests.length;await settings.handleAction('settings-theme',{dataset:{theme:'invalid'}});assert.equal(requests.length,count);
+  fail=true;await assert.rejects(settings.handleAction('settings-theme',{dataset:{theme:'classic'}}),/保存失败/);
+  assert.equal(document.documentElement.dataset.theme,'greek','failed save restores the previous appearance');assert(!state.modal.busy);assert(renderCount>0);
+  console.log('PASS: three theme choices; persisted Greek startup; selection updates; invalid theme guard; save failure rolls back without changing the library.');
+})().catch(error=>{console.error(error);process.exitCode=1;});
 const plays=[],audios=[];
 class Audio {constructor(){this.dataset={};this.events={};this.paused=true;this.error=null;}setAttribute(){}addEventListener(n,f){this.events[n]=f;}pause(){this.paused=true;}play(){this.paused=false;return new Promise((resolve,reject)=>plays.push({resolve,reject}));}}
 const document={querySelectorAll:()=>[],dispatchEvent:()=>{},body:{append:audio=>audios.push(audio)},createElement:()=>new Audio()};

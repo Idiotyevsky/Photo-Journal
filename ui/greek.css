@@ -1,0 +1,238 @@
+@charset "UTF-8";
+
+/* Aegean plaster, glazed ceramics and architectural ornament.
+   Only the new theme is styled below; photographs and export canvases are untouched. */
+html[data-theme="greek"] {
+  --paper: #fafbf8; --paper-light: #fffef9; --paper-deep: #e9efee;
+  --ink: #2d4654; --muted: #647a80; --quiet: #869496;
+  --rule: #d5e1e1; --rule-dark: #a5bcc6;
+  --accent: #286397; --accent-hover: #1b4c78; --accent-wash: #edf3f5;
+  --greek-key: url('/assets/greek-meander.svg');
+  --greek-wave: url('/assets/greek-wave.svg');
+  --greek-olive: url('/assets/greek-olive.svg');
+  --greek-palmette: url('/assets/greek-palmette.svg');
+}
+html[data-theme="greek"] body {
+  background: radial-gradient(#7e9b9f08 .6px, transparent .6px) 0 0 / 5px 5px, var(--paper);
+}
+html[data-theme="greek"] ::selection { background: #d0e4ec; color: #234c68; }
+html[data-theme="greek"] :is(button, a, input, select, textarea, [tabindex]):focus-visible { outline-color: #5489aa; }
+
+/* A tiled spine, rather than a full-page pattern behind the photographs. */
+html[data-theme="greek"] .sidebar { background: #f0f5f3; border-right-color: #c8d9de; }
+html[data-theme="greek"] .sidebar::after {
+  content: ""; position: absolute; top: 31px; right: 6px; bottom: 31px; width: 9px;
+  background: var(--greek-key) center top / 12px 9px repeat-y; opacity: .27; pointer-events: none;
+}
+html[data-theme="greek"] .brand-mark svg { stroke: #326a91; }
+html[data-theme="greek"] .nav-item { color: #5d7885; }
+html[data-theme="greek"] .nav-item:hover { color: #286397; background: #e5eef0; }
+html[data-theme="greek"] .nav-item.active { color: #245e8f; background: #e0ebef; }
+html[data-theme="greek"] .nav-item.active::before { background: #387ca8; }
+html[data-theme="greek"] :is(.nav-count, .breadcrumb, .sidebar-bottom > .inline-link) { color: #6d8690; }
+html[data-theme="greek"] .nav-item.active .nav-count { color: #245e8f; }
+html[data-theme="greek"] .topbar { background: #fffefa; border-bottom: 3px double #d1dee1; }
+html[data-theme="greek"] .breadcrumb::before {
+  content: ""; width: 23px; height: 23px; flex: 0 0 auto; background: var(--greek-palmette) center / contain no-repeat;
+}
+html[data-theme="greek"] .breadcrumb strong { color: #436a7e; }
+html[data-theme="greek"] .daily-note { position: relative; padding-top: 23px; border-top: 3px double #b9ced2; }
+html[data-theme="greek"] .daily-note::before {
+  content: ""; position: absolute; top: -14px; left: calc(50% - 16px); width: 32px; height: 25px;
+  background: var(--greek-palmette) center / contain no-repeat, #f0f5f3; pointer-events: none;
+}
+html[data-theme="greek"] .daily-note time { color: #6c8587; }
+html[data-theme="greek"] .daily-note p { color: #5e786e; }
+
+/* Chapter ornaments: meanders and an island sketch, with space to breathe. */
+html[data-theme="greek"] :is(.collection-intro, .page-heading) { position: relative; padding-bottom: 27px; }
+html[data-theme="greek"] :is(.collection-intro, .page-heading)::after {
+  content: ""; position: absolute; bottom: 0; left: 0; width: 112px; height: 12px;
+  background: var(--greek-key) left center / 16px 12px repeat-x; opacity: .6; pointer-events: none;
+}
+html[data-theme="greek"] .collection-intro::after { width: 100%; opacity: .28; }
+html[data-theme="greek"] .page-heading:not(:has(.heading-actions)) { padding-right: 155px; }
+html[data-theme="greek"] .page-heading:not(:has(.heading-actions))::before {
+  content: ""; position: absolute; top: 0; right: 0; width: 140px; height: 100px;
+  background: var(--greek-olive) right center / contain no-repeat; opacity: .7; pointer-events: none;
+}
+html[data-theme="greek"] body:has(.journal-grid) .page-heading::before { background-image: url('/assets/greek-amphora.svg'); width: 78px; }
+html[data-theme="greek"] body:has(.atlas-panel) .page-heading::before { background-image: var(--greek-palmette); width: 85px; opacity: .6; }
+html[data-theme="greek"] .intro-art {
+  width: 300px; height: 173px; flex-basis: 300px; mask-image: none;
+  background: url('/assets/greek-coast.svg') center / contain no-repeat;
+}
+html[data-theme="greek"] .intro-art > img { display: none; }
+html[data-theme="greek"] :is(.intro-eyebrow, .eyebrow) { color: #7a929b; }
+html[data-theme="greek"] :is(.intro-copy h1, .page-heading h1) { color: #254e6b; }
+html[data-theme="greek"] .intro-stats { color: #68808a; }
+html[data-theme="greek"] .intro-stats strong { color: #326d96; }
+html[data-theme="greek"] .page-footer { border-top: 3px double var(--rule); color: #7d9094; }
+html[data-theme="greek"] .page-footer::after {
+  content: ""; width: 48px; height: 18px; background: var(--greek-wave) center / 48px 14px;
+  pointer-events: none;
+}
+
+/* Ceramic mounts keep the original composition and color of each image. */
+html[data-theme="greek"] :is(.collection-card, .photo-card, .place-card) {
+  padding: 6px; border: 1px solid #d6e2e3; background: #fffefb; box-shadow: 0 3px 10px #325d7206;
+}
+html[data-theme="greek"] :is(.collection-cover, .photo-image-wrap, .place-cover, .journal-cover, .order-image) { background: #eaf0ef; }
+html[data-theme="greek"] .collection-info { padding: 16px 10px 4px; }
+html[data-theme="greek"] .collection-book-meta { border-bottom: 3px double #d5e1e1; }
+html[data-theme="greek"] .collection-number { color: #336b95; letter-spacing: .12em; }
+html[data-theme="greek"] :is(.collection-info h3, .place-info h3) { color: #305974; }
+html[data-theme="greek"] :is(.collection-meta, .photo-meta, .collection-small-count, .place-info p) { color: #72848a; }
+html[data-theme="greek"] .collection-actions { padding-left: 10px; padding-right: 10px; }
+html[data-theme="greek"] :is(.photo-info, .place-info) { padding-left: 10px; padding-right: 10px; border-bottom: 0; }
+html[data-theme="greek"] .collection-create-card { border-color: #afc8d4; background: #eff5f5; }
+html[data-theme="greek"] .collection-create-card::before { border: 3px double #c2d6de; }
+html[data-theme="greek"] .collection-create-card::after {
+  content: ""; position: absolute; right: 24px; bottom: 22px; width: 73px; height: 50px;
+  background: var(--greek-olive) center / contain no-repeat; opacity: .7; pointer-events: none;
+}
+html[data-theme="greek"] .collection-create-card > .icon { color: #6d97b2; }
+html[data-theme="greek"] .collection-create-card:hover { background: #e5eff2; border-color: #6c99b5; }
+html[data-theme="greek"] .collection-create-eyebrow { color: #7f9aa7; }
+html[data-theme="greek"] :is(.collection-placeholder, .journal-empty-cover) { border-color: #c2d6de; color: #5e85a0; background: #eef3f2; }
+html[data-theme="greek"] .collection-placeholder > svg { color: #7696aa; }
+html[data-theme="greek"] .collection-placeholder > span { color: #6b8390; }
+html[data-theme="greek"] .without-cover .collection-cover { background: #e7efef; }
+html[data-theme="greek"] .photo-card.selected { border-color: var(--accent); outline-color: #c5dce7; }
+html[data-theme="greek"] .selection-toolbar { border-color: #a5c2d2; background: #edf4f7; }
+html[data-theme="greek"] :is(.selection-summary, .selection-summary strong) { color: #4e7995; }
+
+/* Timeline chapter breaks and small amphora seals on the travel pages. */
+html[data-theme="greek"] .year-label { color: #316b98; }
+html[data-theme="greek"] .timeline-year::before { background: repeating-linear-gradient(#becfd6 0 5px, transparent 5px 9px); }
+html[data-theme="greek"] .month-label::before { border-radius: 0; width: 8px; height: 8px; left: -45px; transform: translateY(-50%) rotate(45deg); background: #6b93aa; }
+html[data-theme="greek"] .timeline-month + .timeline-month { border-top: 3px double #bdcfd7; }
+html[data-theme="greek"] .month-label::after { content: ""; margin-left: auto; width: 60px; height: 13px; background: var(--greek-wave) center / 48px 14px; opacity: .65; }
+html[data-theme="greek"] .journal-card { border: 1px solid var(--rule); background: #fffef9; padding: 6px; }
+html[data-theme="greek"] .journal-body { position: relative; padding: 20px 20px 22px; border-bottom: 3px double #c4d6df; }
+html[data-theme="greek"] .journal-date { display: flex; align-items: center; gap: 13px; color: #6b8793; }
+html[data-theme="greek"] .journal-date::after { content: ""; width: 40px; height: 14px; background: var(--greek-wave) center / 48px 14px; }
+html[data-theme="greek"] .journal-body h2 { color: #2b5877; }
+html[data-theme="greek"] .journal-meta { color: #758d92; }
+html[data-theme="greek"] .journal-delete { right: 18px; bottom: 25px; }
+html[data-theme="greek"] .journal-note { position: relative; padding: 22px 65px 22px 24px; border: 1px solid #d4e0dc; border-left: 3px solid #95a98c; background: #f0f4ed; }
+html[data-theme="greek"] .journal-note::after { content: ""; position: absolute; right: 10px; top: 12px; width: 42px; height: 55px; background: url('/assets/greek-amphora.svg') center / contain no-repeat; opacity: .6; pointer-events: none; }
+html[data-theme="greek"] .journal-note p { color: #536e66; }
+
+/* The map stays vector-sharp; the ornament belongs to its frame. */
+html[data-theme="greek"] .atlas-panel { padding: 18px; border: 1px solid #cedee1; border-top: 3px double #9bb6c7; background: #fffef9; }
+html[data-theme="greek"] .atlas-map-frame { border: 1px solid #d5e1e1; box-shadow: 0 0 0 5px #f1f6f4; }
+html[data-theme="greek"] .atlas-toolbar { padding-bottom: 15px; }
+html[data-theme="greek"] :is(.atlas-toolbar h3, .atlas-pin-copy strong) { color: #315c78; }
+html[data-theme="greek"] :is(.atlas-tab, .atlas-lines-control) { color: #6a8592; }
+html[data-theme="greek"] .atlas-tab.active { color: #286397; }
+html[data-theme="greek"] .atlas-tab.active::after { background: #5488a8; }
+html[data-theme="greek"] :is(.atlas-edit-button, .atlas-zoom-controls) { border-color: #bfd1db; }
+html[data-theme="greek"] :is(.atlas-edit-button, .atlas-zoom-button, .atlas-zoom-reset, .atlas-zoom-level) { color: #527c96; }
+html[data-theme="greek"] .atlas-stop-row { background: #f4f7f3; border-color: #cfdddb; }
+html[data-theme="greek"] .atlas-stop-row.is-selected { background: #e8f0f3; border-color: #9bb9cb; }
+
+/* Color analysis uses the existing, unmodified photograph swatches. */
+html[data-theme="greek"] .colors-period-date h2 { color: #356785; }
+html[data-theme="greek"] .colors-period-body { padding: 18px; border: 1px solid #d5e1e1; border-top: 3px double #b6ccd6; background: #fffefb; }
+html[data-theme="greek"] .colors-trajectories { border-bottom: 3px double var(--rule); }
+html[data-theme="greek"] .colors-compare { border: 3px double #b5cbd5; background: #f4f8f6; }
+html[data-theme="greek"] .colors-compare-heading h2::after { content: ""; display: inline-block; vertical-align: middle; width: 30px; height: 30px; margin-left: 12px; background: var(--greek-palmette) center / contain no-repeat; }
+
+/* Windows, forms and settings share the same ceramic border language. */
+html[data-theme="greek"] .modal { border-color: #b9ced9; box-shadow: 0 20px 75px #1c4e6b30; }
+html[data-theme="greek"] .modal-header { border-bottom: 3px double #cadce2; background: #f2f7f5; }
+html[data-theme="greek"] .modal-header::after {
+  content: ""; position: absolute; bottom: -5px; left: 29px; width: 64px; height: 9px;
+  background: var(--greek-key) left center / 12px 9px repeat-x, #f2f7f5; opacity: .65; pointer-events: none;
+}
+html[data-theme="greek"] .modal-header h2 { color: #2d5d7d; }
+html[data-theme="greek"] .modal-footer { border-top: 3px double #d4e0e1; background: #f7f9f5; }
+html[data-theme="greek"] :is(.field input, .field textarea, .field select, .search-input, .sort-select, #opening-draft, #opening-search) { border-color: #c5d7de; color: #476c81; background-color: #fffefb; }
+html[data-theme="greek"] :is(.field input, .field textarea, .field select):focus { border-color: #729bb5; box-shadow: 0 0 0 2px #e5eff4; }
+html[data-theme="greek"] .field label { color: #658292; }
+html[data-theme="greek"] .button.secondary { border-color: #b5ccd7; color: #436e89; }
+html[data-theme="greek"] .button.secondary:hover:not(:disabled) { background: #eaf1f4; border-color: #7fa6bf; color: #255f87; }
+html[data-theme="greek"] .button.ghost { color: #6e8891; }
+html[data-theme="greek"] .button.ghost:hover:not(:disabled) { color: #286397; background: #e8f0f3; }
+html[data-theme="greek"] .icon-button { color: #6e8c9d; border-color: #c5d7df; }
+html[data-theme="greek"] .icon-button:hover { color: #286397; background: #e9f1f4; border-color: #8cacc0; }
+html[data-theme="greek"] .drop-zone { border-color: #a0bdce; background: #edf4f5; }
+html[data-theme="greek"] .drop-zone:hover, html[data-theme="greek"] .drop-zone.drag-over { background: #e2eff3; border-color: #568cad; }
+html[data-theme="greek"] .drop-symbol { border: 3px double #b9d0db; color: #6d98b1; }
+html[data-theme="greek"] .drop-title { color: #3e708f; }
+html[data-theme="greek"] .note-callout { border-left-color: #9eae8c; background: #f0f4ed; color: #6c8175; }
+html[data-theme="greek"] .settings-tabs { border-bottom: 3px double #cedee1; }
+html[data-theme="greek"] .settings-track { background: #f5f8f5; border-bottom-color: #dbe5e3; }
+html[data-theme="greek"] .track-meta { color: #7a8c90; }
+html[data-theme="greek"] .music-toggle.is-playing { color: #286397; background: #e2eef3; border-color: #90b3c9; }
+html[data-theme="greek"] .music-status-dot { background: #6595b0; }
+html[data-theme="greek"] .toast { border-color: #bed3dc; border-left-color: #4b81a4; background: #fcfffa; color: #476a7f; }
+html[data-theme="greek"] .confirm-card { border: 3px double #b6cbd6; border-radius: 4px; }
+
+/* Keep the viewing stage dark and neutral. Decoration is limited to its chrome. */
+html[data-theme="greek"] .lightbox-topbar { background: #223d4e; border-bottom: 3px double #4a6d80; }
+html[data-theme="greek"] .photo-details { border-left: 3px double #5e7985; background: #2b414b; }
+html[data-theme="greek"] .photo-details .eyebrow { padding-bottom: 22px; background: var(--greek-wave) left bottom / 48px 14px no-repeat; }
+html[data-theme="greek"] .lightbox .icon-button { color: #b2c9d5; border-color: #5b7c8b; background: transparent; }
+html[data-theme="greek"] .lightbox .icon-button:hover { color: #edf6fa; border-color: #84a7ba; background: #38596b; }
+html[data-theme="greek"] .lightbox .icon-button.active { color: #ed626d; }
+html[data-theme="greek"] .lightbox .button.secondary { color: #b4cbd7; border-color: #648698; background: #324e5c; }
+html[data-theme="greek"] .lightbox .button.secondary:hover { color: #e2f0f5; border-color: #95b8ca; background: #3b6073; }
+html[data-theme="greek"] .lightbox .button.ghost { color: #a6c0cc; }
+html[data-theme="greek"] .lightbox .button.ghost:hover { color: #e0edf2; background: #38596b; }
+
+/* The opening resembles a small, framed dedication in a travel book. */
+html[data-theme="greek"] .daily-opening-screen { background: #fafbf6; color: #2c5570; }
+html[data-theme="greek"] .daily-opening-screen::before {
+  content: ""; position: absolute; inset: 27px; border: 3px double #c2d4da; pointer-events: none;
+  background: var(--greek-key) center 15px / 16px 12px repeat-x;
+}
+html[data-theme="greek"] .daily-opening-screen::after {
+  content: ""; position: absolute; right: 57px; bottom: 58px; width: 160px; height: 107px;
+  background: var(--greek-olive) center / contain no-repeat; opacity: .65; pointer-events: none;
+}
+html[data-theme="greek"] .daily-opening-mark svg { stroke: #477d9e; }
+html[data-theme="greek"] #daily-opening-date { color: #81918f; }
+html[data-theme="greek"] .daily-loading-line { background: #dae5e5; }
+html[data-theme="greek"] .daily-loading-line::after { background: #759db0; }
+html[data-theme="greek"] .empty-art { background: url('/assets/greek-coast.svg') center / contain no-repeat; mask-image: none; }
+html[data-theme="greek"] .empty-art > img { display: none; }
+html[data-theme="greek"] :is(.empty-small h2, .empty-state h2) { color: #3d6b88; }
+
+/* The new preview is also legible while either of the original themes is active. */
+.theme-card[data-theme="greek"] { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; align-items: center; }
+.theme-preview-greek { background: #f1f6f4; border-bottom: 0; border-right: 1px solid #cadde3; }
+.theme-preview-greek::after { content: ""; position: absolute; left: 0; right: 0; bottom: 7px; height: 8px; background: url('/assets/greek-meander.svg') center / 12px 9px repeat-x; opacity: .35; pointer-events: none; }
+.theme-preview-greek .theme-preview-sidebar { border-color: #c4d6dc; background: #dfecef; }
+.theme-preview-greek .theme-preview-copy > span { background: #7198b2; }
+.theme-preview-greek > img { width: 180px; height: 104px; right: 0; top: 14px; }
+.theme-card[data-theme="greek"] .theme-info { padding: 20px; padding-right: 32px; }
+.theme-card[data-theme="greek"] .theme-selected-mark { top: 21px; }
+
+@media (max-width: 1100px) {
+  html[data-theme="greek"] .intro-art { width: 235px; height: 151px; flex-basis: 235px; }
+  html[data-theme="greek"] .atlas-panel { padding: 12px; }
+}
+@media (max-width: 760px) {
+  html[data-theme="greek"] .sidebar::after { display: none; }
+  html[data-theme="greek"] .daily-note { border-top-width: 1px; }
+  html[data-theme="greek"] .daily-note::before { display: none; }
+  html[data-theme="greek"] .intro-art { width: 170px; height: 140px; flex-basis: 170px; }
+  html[data-theme="greek"] .page-heading:not(:has(.heading-actions)) { padding-right: 92px; }
+  html[data-theme="greek"] .page-heading:not(:has(.heading-actions))::before { width: 80px; height: 75px; opacity: .5; }
+  html[data-theme="greek"] .page-footer::after { display: none; }
+  html[data-theme="greek"] .colors-period-body { padding: 12px; }
+  html[data-theme="greek"] .journal-body { padding-left: 12px; padding-right: 12px; }
+  html[data-theme="greek"] .daily-opening-screen::after { right: 34px; bottom: 38px; width: 94px; height: 63px; }
+}
+@media (max-width: 480px) {
+  html[data-theme="greek"] .intro-art { width: 112px; height: 115px; flex-basis: 112px; }
+  html[data-theme="greek"] .atlas-panel { padding: 8px; }
+  html[data-theme="greek"] .page-heading:not(:has(.heading-actions)) { padding-right: 0; }
+  html[data-theme="greek"] .page-heading:not(:has(.heading-actions))::before { display: none; }
+  .theme-card[data-theme="greek"] .theme-info { padding: 14px 28px 14px 12px; font-size: 12px; }
+  .theme-preview-greek > img { width: 140px; right: -7px; top: 0; }
+  .theme-preview-greek .theme-preview-copy { display: none; }
+  .theme-card[data-theme="greek"] .theme-selected-mark { right: 8px; top: 16px; }
+}
