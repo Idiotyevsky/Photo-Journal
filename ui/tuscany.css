@@ -1,0 +1,227 @@
+@charset "UTF-8";
+
+/* Tuscan country stationery: limewash, terracotta, olive ink and botanical borders.
+   The existing oil painting remains the introduction; photographs stay unfiltered. */
+html[data-theme="italian"] {
+  --paper: #f8f3e9; --paper-light: #fffaf0; --paper-deep: #eae3d3;
+  --ink: #514c3b; --muted: #7a7661; --quiet: #9c9178;
+  --rule: #dfd3bb; --rule-dark: #bfaa83;
+  --accent: #996447; --accent-hover: #7d4d35; --accent-wash: #f0e5d0;
+  --tuscan-vine: url('/assets/tuscan-vine.svg');
+  --tuscan-tile: url('/assets/tuscan-tile.svg');
+  --tuscan-rosette: url('/assets/tuscan-rosette.svg');
+  --tuscan-olive: url('/assets/tuscan-olive.svg');
+}
+html[data-theme="italian"] body {
+  background: radial-gradient(#92794f09 .6px, transparent .6px) 0 0 / 4px 5px, var(--paper);
+}
+html[data-theme="italian"] ::selection { background: #e0dfc4; color: #4c5c3c; }
+html[data-theme="italian"] :is(button, a, input, select, textarea, [tabindex]):focus-visible { outline-color: #8c986c; }
+
+/* A narrow ceramic border and olive-toned navigation form the book's spine. */
+html[data-theme="italian"] .sidebar { background: #eeeadb; border-right-color: #d8c8a7; }
+html[data-theme="italian"] .sidebar::after {
+  content: ""; position: absolute; top: 31px; bottom: 31px; right: 5px; width: 12px;
+  background: var(--tuscan-tile) center top / 16px 16px repeat-y; opacity: .35; pointer-events: none;
+}
+html[data-theme="italian"] .brand-mark svg { stroke: #73815b; }
+html[data-theme="italian"] .nav-item { color: #7b7e62; }
+html[data-theme="italian"] .nav-item:hover { color: #616f48; background: #e5e6d2; }
+html[data-theme="italian"] .nav-item.active { color: #5b6b44; background: #e1e4cd; }
+html[data-theme="italian"] .nav-item.active::before { background: #8b986b; }
+html[data-theme="italian"] .nav-item.active .nav-count { color: #6b784c; }
+html[data-theme="italian"] .topbar { background: #fcf8ef; border-bottom: 1px solid #d9c8a8; box-shadow: 0 2px 0 #eee5d4; }
+html[data-theme="italian"] .breadcrumb::before {
+  content: ""; width: 23px; height: 23px; flex-shrink: 0; background: var(--tuscan-rosette) center / contain no-repeat;
+}
+html[data-theme="italian"] .breadcrumb strong { color: #6c7655; }
+html[data-theme="italian"] .daily-note { position: relative; padding-top: 24px; border-top: 1px solid #c8bea0; }
+html[data-theme="italian"] .daily-note::before {
+  content: ""; position: absolute; top: -14px; left: calc(50% - 15px); width: 30px; height: 27px;
+  background: var(--tuscan-rosette) center / contain no-repeat, #eeeadb; pointer-events: none;
+}
+html[data-theme="italian"] .daily-note time { color: #8a896c; }
+html[data-theme="italian"] .daily-note p { color: #6d7954; }
+
+/* Olive sprigs separate chapters; small hill and pottery sketches mark each page. */
+html[data-theme="italian"] :is(.collection-intro, .page-heading) { position: relative; padding-bottom: 29px; }
+html[data-theme="italian"] :is(.collection-intro, .page-heading)::after {
+  content: ""; position: absolute; left: 0; bottom: 0; width: 108px; height: 22px;
+  background: var(--tuscan-vine) left center / 108px 24px repeat-x; opacity: .8; pointer-events: none;
+}
+html[data-theme="italian"] .collection-intro::after { width: 100%; opacity: .5; }
+html[data-theme="italian"] .page-heading:not(:has(.heading-actions)) { padding-right: 150px; }
+html[data-theme="italian"] .page-heading:not(:has(.heading-actions))::before {
+  content: ""; position: absolute; right: 0; top: 0; width: 144px; height: 104px;
+  background: url('/assets/tuscan-hills.svg') right center / contain no-repeat; opacity: .85; pointer-events: none;
+}
+html[data-theme="italian"] body:has(.journal-grid) .page-heading::before { width: 83px; background-image: url('/assets/tuscan-jug.svg'); }
+html[data-theme="italian"] body:has(.colors-page) .page-heading::before { background-image: var(--tuscan-olive); }
+html[data-theme="italian"] .intro-art { flex-basis: 300px; width: 300px; height: 173px; }
+html[data-theme="italian"] .intro-art > .intro-italian-art { width: 300px; height: 200px; top: -12px; left: 0; }
+html[data-theme="italian"] :is(.intro-copy h1, .page-heading h1) { color: #596347; }
+html[data-theme="italian"] :is(.intro-eyebrow, .eyebrow) { color: #9a8965; }
+html[data-theme="italian"] .intro-stats { color: #8b8467; }
+html[data-theme="italian"] .intro-stats strong { color: #7c8056; }
+html[data-theme="italian"] .page-footer { border-top: 1px solid #d9cbb0; color: #9d9072; }
+
+/* Ivory mounts, fine ochre rules and a pottery stamp on the empty volume. */
+html[data-theme="italian"] :is(.collection-card, .photo-card, .place-card) {
+  padding: 6px; border: 1px solid #dfd2b8; background: #fffaf0; box-shadow: 0 3px 12px #79603a07;
+}
+html[data-theme="italian"] :is(.collection-cover, .photo-image-wrap, .place-cover, .journal-cover, .order-image) { background: #ebe6da; }
+html[data-theme="italian"] .collection-info { padding: 16px 11px 4px; }
+html[data-theme="italian"] .collection-book-meta { border-bottom: 1px solid #dfd3ba; }
+html[data-theme="italian"] .collection-number { color: #a17d4a; letter-spacing: .1em; }
+html[data-theme="italian"] .collection-info h3 { color: #626b4a; }
+html[data-theme="italian"] .collection-actions { padding-left: 11px; padding-right: 11px; }
+html[data-theme="italian"] .collection-actions .icon-button { color: #94966b; }
+html[data-theme="italian"] :is(.photo-info, .place-info) { padding-left: 10px; padding-right: 10px; border-bottom: 0; }
+html[data-theme="italian"] :is(.photo-meta, .collection-meta, .collection-small-count) { color: #8a8267; }
+html[data-theme="italian"] .collection-create-card { border-color: #cebb96; background: #f0e8d6; }
+html[data-theme="italian"] .collection-create-card::before { border: 1px solid #daccae; outline: 1px solid #e7dbc4; outline-offset: 4px; }
+html[data-theme="italian"] .collection-create-card::after {
+  content: ""; position: absolute; right: 22px; bottom: 20px; width: 48px; height: 64px;
+  background: url('/assets/tuscan-jug.svg') center / contain no-repeat; opacity: .65; pointer-events: none;
+}
+html[data-theme="italian"] .collection-create-card:hover { background: #eae3cf; border-color: #b3a580; }
+html[data-theme="italian"] .collection-create-card > .icon { color: #8b9467; }
+html[data-theme="italian"] .collection-create-card strong { color: #737a53; }
+html[data-theme="italian"] .photo-card.selected { border-color: #8e8258; outline-color: #d9d8ba; }
+html[data-theme="italian"] .selection-toolbar { background: #eeedda; border-color: #b9bb96; }
+
+/* Travel notes resemble pages from a pressed-botanical notebook. */
+html[data-theme="italian"] .year-label { color: #89845b; }
+html[data-theme="italian"] .timeline-year::before { background: #d5cbae; }
+html[data-theme="italian"] .month-label::before { background: #96a079; box-shadow: 0 0 0 1px #b6bb94; }
+html[data-theme="italian"] .timeline-month + .timeline-month { border-top-color: #c5b68f; }
+html[data-theme="italian"] .month-label::after { content: ""; margin-left: auto; width: 83px; height: 20px; background: var(--tuscan-vine) center / 92px 20px; opacity: .75; }
+html[data-theme="italian"] .journal-card { padding: 6px; border: 1px solid #dfd2b8; background: #fffaf0; }
+html[data-theme="italian"] .journal-body { padding: 20px 20px 24px; border-bottom: 1px solid #c8c5a3; }
+html[data-theme="italian"] .journal-date { display: flex; align-items: center; gap: 12px; color: #9c8c65; }
+html[data-theme="italian"] .journal-date::after { content: ""; width: 63px; height: 18px; background: var(--tuscan-vine) center / 83px 18px; }
+html[data-theme="italian"] .journal-body h2 { color: #616e4b; }
+html[data-theme="italian"] .journal-meta { color: #8d8967; }
+html[data-theme="italian"] .journal-delete { right: 18px; bottom: 25px; }
+html[data-theme="italian"] .journal-note { position: relative; padding: 23px 78px 23px 24px; border: 1px solid #d9dcc3; border-left: 3px solid #a3ad7f; background: #eff0e2; }
+html[data-theme="italian"] .journal-note::after {
+  content: ""; position: absolute; right: 9px; top: 16px; width: 60px; height: 62px;
+  background: var(--tuscan-olive) center / contain no-repeat; opacity: .8; pointer-events: none;
+}
+html[data-theme="italian"] .journal-note p { color: #737a58; }
+
+/* Geography and color values remain unchanged; only their surrounding frames vary. */
+html[data-theme="italian"] .atlas-panel { padding: 18px; border: 1px solid #d6c5a3; background: #fdf8ec; box-shadow: inset 0 3px #eee4cc; }
+html[data-theme="italian"] .atlas-toolbar { padding-bottom: 12px; }
+html[data-theme="italian"] .atlas-toolbar h3 { color: #717b51; }
+html[data-theme="italian"] .atlas-map-frame { border: 1px solid #d9d1b5; box-shadow: 0 0 0 5px #f2ebd9; }
+html[data-theme="italian"] .colors-period-date h2 { color: #7b8055; }
+html[data-theme="italian"] .colors-period-body { padding: 18px; border: 1px solid #dfd2b8; border-top: 3px solid #d6caaa; background: #fffaf0; }
+html[data-theme="italian"] .colors-compare { border-color: #c4bd98; background: #f5f3e4; }
+html[data-theme="italian"] .colors-compare-heading h2::after { content: ""; display: inline-block; vertical-align: middle; width: 29px; height: 29px; margin-left: 12px; background: var(--tuscan-rosette) center / contain no-repeat; }
+
+/* Window edges pick up the same vine, ceramic and linen details. */
+html[data-theme="italian"] .modal { border-color: #cdbc99; box-shadow: 0 22px 75px #55442630; }
+html[data-theme="italian"] .modal-header { border-bottom: 1px solid #d6c5a6; background: #f5eddd; }
+html[data-theme="italian"] .modal-header::after {
+  content: ""; position: absolute; left: 29px; bottom: -9px; width: 101px; height: 18px;
+  background: var(--tuscan-vine) center / 101px 22px no-repeat, #f5eddd; pointer-events: none;
+}
+html[data-theme="italian"] .modal-header h2 { color: #6d7752; }
+html[data-theme="italian"] .modal-footer { border-top-color: #dfd2b8; background: #f8f2e4; }
+html[data-theme="italian"] :is(.field input, .field textarea, .field select, .search-input, .sort-select, #opening-draft, #opening-search) { color: #6c704f; border-color: #d9cdb2; background-color: #fffcf4; }
+html[data-theme="italian"] :is(.field input, .field textarea, .field select):focus { border-color: #a4ac7e; box-shadow: 0 0 0 2px #e8ead8; }
+html[data-theme="italian"] .field label { color: #85836a; }
+html[data-theme="italian"] .button.secondary { color: #78815a; border-color: #c4c4a5; }
+html[data-theme="italian"] .button.secondary:hover:not(:disabled) { color: #667548; border-color: #a6ad80; background: #ebecd9; }
+html[data-theme="italian"] .icon-button { color: #89916c; border-color: #d1cfb3; }
+html[data-theme="italian"] .icon-button:hover { color: #6d7a4e; border-color: #b5ba94; background: #ebecd9; }
+html[data-theme="italian"] .drop-zone { border-color: #b6bd94; background: #eff0e2; }
+html[data-theme="italian"] .drop-zone:hover, html[data-theme="italian"] .drop-zone.drag-over { border-color: #95a477; background: #e6ead5; }
+html[data-theme="italian"] .drop-symbol { border-color: #cbd1ae; color: #8b976b; }
+html[data-theme="italian"] .drop-title { color: #7b845a; }
+html[data-theme="italian"] .note-callout { border-left-color: #9fab7b; background: #ecefdf; color: #7b825d; }
+html[data-theme="italian"] .settings-track { background: #f7f3e7; border-bottom-color: #e5d9c1; }
+html[data-theme="italian"] .music-toggle.is-playing { color: #738052; border-color: #b6bf91; background: #e8ecd8; }
+html[data-theme="italian"] .music-status-dot { background: #909f6e; }
+html[data-theme="italian"] .toast { background: #fffbf0; border-color: #d5c6a4; border-left-color: #a2ac78; color: #7a805a; }
+html[data-theme="italian"] .confirm-card { border: 1px solid #cbbc96; border-radius: 4px; box-shadow: 0 20px 75px #55442630, inset 0 0 0 5px #f1e8d5; }
+
+/* Viewing keeps a neutral dark canvas, with olive and brass on the surrounding controls. */
+html[data-theme="italian"] .lightbox-topbar { background: #363a30; border-bottom: 1px solid #687055; }
+html[data-theme="italian"] .lightbox-title { color: #d6d5bf; }
+html[data-theme="italian"] .photo-details { background: #363d32; border-left: 1px solid #687055; }
+html[data-theme="italian"] .photo-details .eyebrow { color: #c2bf98; padding-bottom: 22px; background: var(--tuscan-vine) left bottom / 80px 18px no-repeat; }
+html[data-theme="italian"] .photo-details h2 { color: #e9e5cd; }
+html[data-theme="italian"] .photo-details .detail-row dt { color: #b2b79d; }
+html[data-theme="italian"] .photo-details .detail-row dd { color: #d6dac4; }
+html[data-theme="italian"] .photo-details .detail-section h3 { color: #c7c8ad; }
+html[data-theme="italian"] .photo-details :is(.caption-text, .date-source-note, .location-badge, .batch-hint) { color: #bac8a7; }
+html[data-theme="italian"] .photo-details .location-badge { border-color: #707d5b; }
+html[data-theme="italian"] .photo-details .detail-actions { border-top-color: #677457; }
+html[data-theme="italian"] .lightbox-nav { color: #c2cbad; border-color: #6d7a5b; background: #3e4a36; }
+html[data-theme="italian"] .lightbox-nav:hover { color: #e8edd9; border-color: #9dab88; background: #526043; }
+html[data-theme="italian"] .lightbox-counter { color: #a9b29b; }
+html[data-theme="italian"] .lightbox .icon-button { color: #c3c7ac; border-color: #737e60; background: transparent; }
+html[data-theme="italian"] .lightbox .icon-button:hover { color: #f0eed5; border-color: #a4ad8c; background: #4c5941; }
+html[data-theme="italian"] .lightbox .icon-button.active { color: #ed626d; }
+html[data-theme="italian"] .lightbox .export-photo-button { color: #eee6ca; border-color: #828565; background: #525d43; }
+html[data-theme="italian"] .lightbox .export-photo-button:hover { color: #faf2d9; border-color: #a5ac87; background: #68744f; }
+html[data-theme="italian"] .lightbox .button.secondary { color: #c4d1b2; border-color: #7a8965; background: #414d38; }
+html[data-theme="italian"] .lightbox .button.secondary:hover { color: #e9edda; border-color: #a4b389; background: #526243; }
+html[data-theme="italian"] .lightbox .button.ghost { color: #b6c3a1; }
+html[data-theme="italian"] .lightbox .button.ghost:hover { color: #e9edda; background: #4a583e; }
+
+/* A botanical dedication at startup, without changing the automatic opening. */
+html[data-theme="italian"] .daily-opening-screen { color: #65734c; background: #faf5e9; }
+html[data-theme="italian"] .daily-opening-screen::before {
+  content: ""; position: absolute; inset: 28px; border: 1px solid #d9cbaa;
+  outline: 1px solid #e8ddc5; outline-offset: 5px; pointer-events: none;
+}
+html[data-theme="italian"] .daily-opening-screen::after {
+  content: ""; position: absolute; right: 52px; bottom: 50px; width: 174px; height: 112px;
+  background: var(--tuscan-olive) center / contain no-repeat; opacity: .65; pointer-events: none;
+}
+html[data-theme="italian"] .daily-opening-mark { position: relative; }
+html[data-theme="italian"] .daily-opening-mark::after {
+  content: ""; position: absolute; top: -38px; left: 25px; width: 28px; height: 28px;
+  background: var(--tuscan-rosette) center / contain no-repeat; opacity: .65; pointer-events: none;
+}
+html[data-theme="italian"] .daily-opening-mark svg { stroke: #8a966b; }
+html[data-theme="italian"] #daily-opening-date { color: #9c9274; }
+html[data-theme="italian"] .daily-loading-line { background: #e2dac1; }
+html[data-theme="italian"] .daily-loading-line::after { background: #a4ad7f; }
+
+/* The Italian preview also shows its botanical detail in the other two themes. */
+.theme-preview-italian::after {
+  content: ""; position: absolute; left: 31px; right: 0; bottom: 2px; height: 13px;
+  background: url('/assets/tuscan-vine.svg') center / 72px 16px repeat-x; opacity: .65; pointer-events: none;
+}
+.theme-card[data-theme="italian"] .theme-preview { background: #f7eedb; }
+.theme-preview-italian .theme-preview-sidebar { background: #e5e3cc; border-color: #d0c5a5; }
+.theme-preview-italian .theme-preview-copy > span { background: #a5ac82; }
+
+@media (max-width: 1100px) {
+  html[data-theme="italian"] .intro-art { flex-basis: 240px; width: 240px; height: 154px; }
+  html[data-theme="italian"] .intro-art > .intro-italian-art { width: 250px; height: 167px; top: -5px; }
+  html[data-theme="italian"] .atlas-panel { padding: 12px; }
+}
+@media (max-width: 760px) {
+  html[data-theme="italian"] .sidebar::after { display: none; }
+  html[data-theme="italian"] .daily-note::before { display: none; }
+  html[data-theme="italian"] .intro-art { flex-basis: 180px; width: 180px; height: 140px; }
+  html[data-theme="italian"] .intro-art > .intro-italian-art { width: 195px; height: 130px; top: 5px; left: -7px; }
+  html[data-theme="italian"] .page-heading:not(:has(.heading-actions)) { padding-right: 92px; }
+  html[data-theme="italian"] .page-heading:not(:has(.heading-actions))::before { width: 83px; height: 75px; opacity: .6; }
+  html[data-theme="italian"] .journal-body { padding-left: 12px; padding-right: 12px; }
+  html[data-theme="italian"] .colors-period-body { padding: 12px; }
+  html[data-theme="italian"] .daily-opening-screen::after { right: 34px; bottom: 35px; width: 94px; height: 64px; }
+}
+@media (max-width: 480px) {
+  html[data-theme="italian"] .intro-art { flex-basis: 116px; width: 116px; height: 120px; }
+  html[data-theme="italian"] .intro-art > .intro-italian-art { width: 150px; height: 100px; top: 12px; left: -17px; }
+  html[data-theme="italian"] .page-heading:not(:has(.heading-actions)) { padding-right: 0; }
+  html[data-theme="italian"] .page-heading:not(:has(.heading-actions))::before { display: none; }
+  html[data-theme="italian"] .atlas-panel { padding: 8px; }
+  html[data-theme="italian"] .daily-opening-mark::after { left: 18px; }
+}
