@@ -443,7 +443,7 @@ class AlbumStore:
             try:
                 stored = json.loads(row["value_json"])
                 if isinstance(stored, dict):
-                    if stored.get("theme") in {"classic", "italian", "greek"}:
+                    if stored.get("theme") in {"classic", "italian", "greek", "kyoto"}:
                         result["theme"] = stored["theme"]
                     volume = stored.get("music_volume")
                     if not isinstance(volume, bool) and isinstance(volume, (int, float)) and math.isfinite(volume) and 0 <= volume <= 1:
@@ -537,8 +537,8 @@ class AlbumStore:
     def update_settings(self, changes: dict) -> dict:
         if not isinstance(changes, dict) or set(changes) - {"theme", "music_volume"}:
             raise ApiError(400, "设置中包含不支持的字段。")
-        if "theme" in changes and changes["theme"] not in ("classic", "italian", "greek"):
-            raise ApiError(400, "请选择经典、意大利油画或希腊主题。")
+        if "theme" in changes and changes["theme"] not in ("classic", "italian", "greek", "kyoto"):
+            raise ApiError(400, "请选择经典、意大利油画、希腊或京都主题。")
         if "music_volume" in changes:
             volume = changes["music_volume"]
             if isinstance(volume, bool) or not isinstance(volume, (int, float)):

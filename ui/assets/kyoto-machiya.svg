@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="230" viewBox="0 0 400 230" fill="none">
+  <defs>
+    <pattern id="wood" width="9" height="36" patternUnits="userSpaceOnUse"><path d="M3 0v36" stroke="#b7a58a" stroke-width=".8"/></pattern>
+    <pattern id="tiles" width="12" height="8" patternUnits="userSpaceOnUse"><path d="M0 7h12M6 0v7" stroke="#a5aaa0" stroke-width=".7" opacity=".55"/></pattern>
+    <g id="maple"><path d="m0 9-3-5-6 1 3-4-6-4 7-1-2-6 5 3 2-8 2 8 5-3-2 6 7 1-6 4 3 4-6-1Z" fill="currentColor"/></g>
+  </defs>
+  <circle cx="302" cy="49" r="25" fill="#e4deca" opacity=".6"/>
+  <path d="M40 184c35-23 83-20 120-17s92-15 146-3c30 6 43 16 60 26l-9 18H40Z" fill="#e7e7d9"/>
+  <path d="M55 200c77-5 169-3 280 1" stroke="#cbc7b3" stroke-width=".8"/>
+  <g stroke="#8b8b77" stroke-width="1.05" stroke-linejoin="round">
+    <path d="M99 105h173v81H99Z" fill="#ece6d5"/>
+    <path d="M107 123h157v63H107Z" fill="#a3957c"/>
+    <path d="M107 123h157v63H107Z" fill="url(#wood)"/>
+    <path d="M110 82h151v31H110Z" fill="#f4f0e3"/>
+    <path d="M122 91h127v15H122Z" fill="#6d776c"/>
+    <path d="M130 91v15m9-15v15m9-15v15m9-15v15m9-15v15m9-15v15m9-15v15m9-15v15m9-15v15m9-15v15m9-15v15m9-15v15m9-15v15" stroke="#b6b5a1"/>
+    <path d="m99 57 174 1 17 26H83Z" fill="#7f897f"/>
+    <path d="m99 57 174 1 17 26H83Z" fill="url(#tiles)"/>
+    <path d="M84 84h205v5H84Z" fill="#646f67"/>
+    <path d="m96 111 177 1 15 13H84Z" fill="#859086"/>
+    <path d="m96 111 177 1 15 13H84Z" fill="url(#tiles)"/>
+    <path d="M84 125h204v4H84Z" fill="#737d70"/>
+    <path d="M119 140h43v34h-43Z" fill="#d3d3bc"/>
+    <path d="M124 140v34m7-34v34m7-34v34m7-34v34m7-34v34m7-34v34m-40-18h43" stroke="#998e74"/>
+    <path d="M184 132h47v54h-47Z" fill="#5c675b"/>
+    <path d="M180 134h55v26h-55Z" fill="#929b79"/>
+    <path d="M198 136v24m18-24v24" stroke="#dadbc4"/>
+    <path d="M242 141h14v34h-14Z" fill="#bdbaa2"/>
+    <path d="M249 142v33" stroke="#928773"/>
+    <path d="M95 183h185v5H95Z" fill="#d3ccb7"/>
+  </g>
+  <g stroke="#9b8b70" stroke-width=".8">
+    <path d="M272 130h14m-3 0v7"/>
+    <path d="M278 137c-9 5-9 25 0 31h10c8-6 8-26 0-31Z" fill="#e9d8b8"/>
+    <path d="M273 145h19m-21 6h23m-22 6h21m-17 11h14" stroke="#bda181"/>
+    <path d="M277 137h11m-11 32h11" stroke="#9d6b52" stroke-width="2"/>
+  </g>
+  <path d="M62 182c10-28 5-68-7-113m10 57-24-20m23 35 20-15M55 76l20-25" stroke="#9e8f74" stroke-width="1.2" stroke-linecap="round"/>
+  <use href="#maple" transform="translate(45 101) rotate(-30)" color="#a3a785"/>
+  <use href="#maple" transform="translate(57 71) rotate(10) scale(1.2)" color="#b28b69"/>
+  <use href="#maple" transform="translate(76 51) rotate(22)" color="#ac7b61"/>
+  <use href="#maple" transform="translate(85 123) rotate(45) scale(.8)" color="#b39b78"/>
+  <use href="#maple" transform="translate(36 83) rotate(-20) scale(.8)" color="#9d8f6b"/>
+  <path d="M315 184c-6-27-2-58 4-93m-2 44 15-21m-16 36-14-15" stroke="#97a07f" stroke-width="1.1"/>
+  <g fill="#a2ad88"><path d="M319 119c1-13 10-23 19-24-1 12-8 22-19 24Zm-2 19c-12-5-18-15-16-24 11 5 17 13 16 24Zm1 13c10-1 21-12 22-23-13 2-20 12-22 23Z"/></g>
+  <path d="M310 181h17l-3 14h-12Z" fill="#b59d7c"/>
+  <path d="M190 194c7-4 19-4 24 0-5 5-18 5-24 0Zm-13 9c6-4 18-3 23 0-7 4-18 4-23 0Zm-13 9c7-3 18-3 23 0-5 4-17 4-23 0Z" fill="#b9baa8"/>
+  <path d="M40 207h87m111 4h113" stroke="#cfccba" stroke-width=".7"/>
+</svg>

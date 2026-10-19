@@ -1,0 +1,265 @@
+@charset "UTF-8";
+
+/* Kyoto: washi, quiet timber lattice, moss, maple and a restrained vermilion accent.
+   Ornament stays on the page and its chrome; photographs and exports are unfiltered. */
+html[data-theme="kyoto"] {
+  --paper: #f7f5ed; --paper-light: #fcfbf5; --paper-deep: #e8e9df;
+  --ink: #3b463b; --muted: #6b7461; --quiet: #959986;
+  --rule: #d9dccf; --rule-dark: #b5beaa;
+  --accent: #657651; --accent-hover: #4e5f3e; --accent-wash: #e9eddf;
+  --kyoto-wave: url('/assets/kyoto-seigaiha.svg');
+  --kyoto-lattice: url('/assets/kyoto-lattice.svg');
+  --kyoto-maple: url('/assets/kyoto-maple.svg');
+}
+html[data-theme="kyoto"] body {
+  background: radial-gradient(#71816a09 .6px, transparent .6px) 0 0 / 5px 7px, var(--paper);
+}
+html[data-theme="kyoto"] ::selection { background: #dce3ce; color: #3d5039; }
+html[data-theme="kyoto"] :is(button, a, input, select, textarea, [tabindex]):focus-visible { outline-color: #8d9b7a; }
+
+/* A strip of timber lattice and a small red register mark on the navigation spine. */
+html[data-theme="kyoto"] .sidebar { background: #edeee3; border-right-color: #d2d7c6; }
+html[data-theme="kyoto"] .sidebar::after {
+  content: ""; position: absolute; top: 31px; bottom: 31px; right: 6px; width: 10px;
+  background: var(--kyoto-lattice) center top / 15px 24px repeat-y; opacity: .32; pointer-events: none;
+}
+html[data-theme="kyoto"] .brand-mark svg { stroke: #6e7e63; }
+html[data-theme="kyoto"] .nav-item { color: #66775b; }
+html[data-theme="kyoto"] .nav-item:hover { color: #586c48; background: #e3e9d8; }
+html[data-theme="kyoto"] .nav-item.active { color: #516843; background: #dfe7d4; }
+html[data-theme="kyoto"] .nav-item.active::before { background: #aa705b; }
+html[data-theme="kyoto"] .nav-item.active .nav-count { color: #657950; }
+html[data-theme="kyoto"] .nav-count { color: #728165; }
+html[data-theme="kyoto"] .topbar { background: #faf9f2; border-bottom: 1px solid #d6d9ca; }
+html[data-theme="kyoto"] .breadcrumb { color: #748267; }
+html[data-theme="kyoto"] .breadcrumb strong { color: #6d7d61; }
+html[data-theme="kyoto"] .breadcrumb::before {
+  content: ""; width: 18px; height: 20px; flex-shrink: 0; border: 1px solid #c9cebb;
+  background: var(--kyoto-lattice) center / 15px 20px; opacity: .8;
+}
+html[data-theme="kyoto"] .sidebar-bottom > .inline-link { color: #7e8a71; }
+html[data-theme="kyoto"] .daily-note { position: relative; padding-top: 23px; border-top: 1px solid #c6cfb9; }
+html[data-theme="kyoto"] .daily-note::before {
+  content: ""; position: absolute; left: 0; top: -2px; width: 24px; height: 3px;
+  background: #a66d58; pointer-events: none;
+}
+html[data-theme="kyoto"] .daily-note time { color: #748267; }
+html[data-theme="kyoto"] .daily-note p { color: #687d58; }
+
+/* A machiya sketch and a light seigaiha band form the introduction. */
+html[data-theme="kyoto"] :is(.collection-intro, .page-heading) { position: relative; padding-bottom: 28px; }
+html[data-theme="kyoto"] :is(.collection-intro, .page-heading)::after {
+  content: ""; position: absolute; left: 0; bottom: 0; width: 112px; height: 16px;
+  background: var(--kyoto-wave) left bottom / 48px 24px repeat-x; opacity: .55; pointer-events: none;
+}
+html[data-theme="kyoto"] .collection-intro::after { width: 100%; opacity: .3; }
+html[data-theme="kyoto"] .intro-art {
+  flex-basis: 300px; width: 300px; height: 173px; mask-image: none;
+  background: url('/assets/kyoto-machiya.svg') center / contain no-repeat;
+}
+html[data-theme="kyoto"] .intro-art > img { display: none; }
+html[data-theme="kyoto"] :is(.intro-copy h1, .page-heading h1) { color: #43553e; }
+html[data-theme="kyoto"] :is(.intro-eyebrow, .eyebrow) { color: #929882; }
+html[data-theme="kyoto"] .intro-eyebrow { padding-left: 10px; border-left: 2px solid #b2816b; }
+html[data-theme="kyoto"] .intro-stats { color: #6b7b5c; }
+html[data-theme="kyoto"] .intro-stats strong { color: #71845b; }
+html[data-theme="kyoto"] .page-heading:not(:has(.heading-actions)) { padding-right: 148px; }
+html[data-theme="kyoto"] .page-heading:not(:has(.heading-actions))::before {
+  content: ""; position: absolute; right: 0; top: 0; width: 140px; height: 102px;
+  background: var(--kyoto-maple) right center / contain no-repeat; opacity: .75; pointer-events: none;
+}
+html[data-theme="kyoto"] body:has(.journal-grid) .page-heading::before { width: 73px; background-image: url('/assets/kyoto-lantern.svg'); }
+html[data-theme="kyoto"] body:has(.atlas-panel) .page-heading::before { background-image: url('/assets/kyoto-stones.svg'); }
+html[data-theme="kyoto"] .page-footer { color: #909880; border-top-color: #cdd5c1; }
+
+/* Quiet paper mounts with a small bookbinding corner, outside the image area. */
+html[data-theme="kyoto"] :is(.collection-card, .photo-card, .place-card) {
+  position: relative; padding: 6px; border: 1px solid #d6dccc; background: #fcfbf5; box-shadow: 0 3px 12px #58624805;
+}
+html[data-theme="kyoto"] :is(.collection-card, .photo-card, .place-card)::before {
+  content: ""; position: absolute; top: -1px; left: -1px; width: 16px; height: 16px;
+  border-top: 1px solid #9aab89; border-left: 1px solid #9aab89; pointer-events: none;
+}
+html[data-theme="kyoto"] :is(.collection-cover, .photo-image-wrap, .place-cover, .journal-cover, .order-image) { background: #e9ece3; }
+html[data-theme="kyoto"] .collection-info { padding: 16px 10px 4px; }
+html[data-theme="kyoto"] .collection-book-meta { border-bottom: 1px solid #d6ddcb; }
+html[data-theme="kyoto"] .collection-number { color: #81916e; letter-spacing: .12em; }
+html[data-theme="kyoto"] .collection-number::before { content: ""; display: inline-block; width: 3px; height: 9px; margin-right: 7px; background: #b17c61; }
+html[data-theme="kyoto"] .collection-info h3 { color: #566b48; }
+html[data-theme="kyoto"] .collection-actions { padding-left: 10px; padding-right: 10px; }
+html[data-theme="kyoto"] .collection-actions .icon-button { color: #7b8c66; }
+html[data-theme="kyoto"] :is(.photo-info, .place-info) { padding-left: 10px; padding-right: 10px; border-bottom: 0; }
+html[data-theme="kyoto"] :is(.photo-meta, .collection-meta, .collection-small-count, .place-info p) { color: #687b57; }
+html[data-theme="kyoto"] .place-info h3 { color: #647955; }
+html[data-theme="kyoto"] .collection-create-card { border-color: #c5cfb6; background: #edf0e2; }
+html[data-theme="kyoto"] .collection-create-card::before { border: 1px solid #d7deca; }
+html[data-theme="kyoto"] .collection-create-card::after {
+  content: ""; position: absolute; right: 24px; bottom: 20px; width: 72px; height: 53px;
+  background: var(--kyoto-maple) center / contain no-repeat; opacity: .7; pointer-events: none;
+}
+html[data-theme="kyoto"] .collection-create-card:hover { background: #e5ebd9; border-color: #acbd95; }
+html[data-theme="kyoto"] .collection-create-card > .icon { color: #8fa176; }
+html[data-theme="kyoto"] .collection-create-card strong { color: #71845a; }
+html[data-theme="kyoto"] .collection-create-eyebrow { color: #91a07f; }
+html[data-theme="kyoto"] .collection-placeholder { color: #819270; border-color: #ccd5bf; background: #e9eedf; }
+html[data-theme="kyoto"] .collection-placeholder > svg { color: #92a37c; }
+html[data-theme="kyoto"] .collection-placeholder > span { color: #7d9070; }
+html[data-theme="kyoto"] .without-cover .collection-cover { background: #e5eadb; }
+html[data-theme="kyoto"] .photo-card.selected { border-color: #93a578; outline-color: #d1ddc3; }
+html[data-theme="kyoto"] .selection-toolbar { border-color: #bccba7; background: #edf1e3; }
+html[data-theme="kyoto"] :is(.selection-summary, .selection-summary strong) { color: #74895e; }
+
+/* Chapters and field notes use wave dividers and maple accents. */
+html[data-theme="kyoto"] .year-label { color: #7b8f66; }
+html[data-theme="kyoto"] .timeline-year::before { background: #cbd6bf; }
+html[data-theme="kyoto"] .month-label::before { background: #9aab82; box-shadow: 0 0 0 1px #becdad; }
+html[data-theme="kyoto"] .timeline-month + .timeline-month { border-top-color: #b7c7a3; }
+html[data-theme="kyoto"] .month-label::after { content: ""; margin-left: auto; width: 64px; height: 14px; background: var(--kyoto-wave) center / 28px 14px; opacity: .65; }
+html[data-theme="kyoto"] .journal-card { padding: 6px; border: 1px solid #d5ddc9; background: #fcfbf5; }
+html[data-theme="kyoto"] .journal-body { padding: 20px 20px 24px; border-bottom: 1px solid #c1cfb2; }
+html[data-theme="kyoto"] .journal-date { display: flex; align-items: center; gap: 12px; color: #6d7e5b; }
+html[data-theme="kyoto"] .journal-date::after { content: ""; width: 49px; height: 14px; background: var(--kyoto-wave) center / 28px 14px; opacity: .8; }
+html[data-theme="kyoto"] .journal-body h2 { color: #647d51; }
+html[data-theme="kyoto"] .journal-meta { color: #71825d; }
+html[data-theme="kyoto"] .journal-delete { right: 18px; bottom: 25px; }
+html[data-theme="kyoto"] .journal-note { position: relative; padding: 23px 78px 23px 24px; border: 1px solid #d9dfce; border-left: 3px solid #a4b68b; background: #f1f4e9; }
+html[data-theme="kyoto"] .journal-note::after {
+  content: ""; position: absolute; right: 8px; top: 16px; width: 62px; height: 60px;
+  background: var(--kyoto-maple) center / contain no-repeat; opacity: .7; pointer-events: none;
+}
+html[data-theme="kyoto"] .journal-note p { color: #657954; }
+
+/* The atlas and the measured color palettes retain their original content. */
+html[data-theme="kyoto"] .atlas-panel { padding: 18px; border: 1px solid #cbd5bd; background: #fafbf2; }
+html[data-theme="kyoto"] .atlas-toolbar { padding-bottom: 12px; }
+html[data-theme="kyoto"] .atlas-toolbar h3 { color: #738a5b; }
+html[data-theme="kyoto"] .atlas-map-frame { border: 1px solid #d0d9c5; box-shadow: 0 0 0 5px #edf1e5; }
+html[data-theme="kyoto"] :is(.atlas-tab, .atlas-lines-control) { color: #667b52; }
+html[data-theme="kyoto"] .atlas-tab.active { color: #718957; }
+html[data-theme="kyoto"] .atlas-tab.active::after { background: #99ad7b; }
+html[data-theme="kyoto"] :is(.atlas-edit-button, .atlas-zoom-controls) { border-color: #c5d2b5; }
+html[data-theme="kyoto"] :is(.atlas-edit-button, .atlas-zoom-button, .atlas-zoom-reset, .atlas-zoom-level) { color: #6b8153; }
+html[data-theme="kyoto"] :is(.atlas-zoom-button, .atlas-zoom-reset):hover:not(:disabled) { color: #617d49; background: #e8f0dc; }
+html[data-theme="kyoto"] .atlas-stop-row { border-color: #d0dbc4; background: #f0f4e7; }
+html[data-theme="kyoto"] .atlas-stop-row.is-selected { border-color: #b0c29a; background: #e5edda; }
+html[data-theme="kyoto"] .colors-period-date h2 { color: #6a8051; }
+html[data-theme="kyoto"] .colors-period-body { padding: 18px; border: 1px solid #d4ddc9; border-top: 3px solid #c4d2b3; background: #fcfdf6; }
+html[data-theme="kyoto"] .colors-compare { border-color: #bfceac; background: #f0f5e7; }
+html[data-theme="kyoto"] .colors-compare-heading h2 { color: #718957; }
+
+/* Forms, settings and confirmation windows share paper and timber details. */
+html[data-theme="kyoto"] .modal { border-color: #bfcdac; box-shadow: 0 22px 75px #44583a2b; }
+html[data-theme="kyoto"] .modal-header { border-bottom: 1px solid #c9d5b8; background: #eef3e4; }
+html[data-theme="kyoto"] .modal-header::after {
+  content: ""; position: absolute; left: 29px; bottom: -5px; width: 76px; height: 10px;
+  background: var(--kyoto-lattice) left center / 18px 24px repeat-x, #eef3e4; opacity: .65; pointer-events: none;
+}
+html[data-theme="kyoto"] .modal-header h2 { color: #6e8655; }
+html[data-theme="kyoto"] .modal-footer { border-top-color: #d0dcc0; background: #f2f6e9; }
+html[data-theme="kyoto"] :is(.field input, .field textarea, .field select, .search-input, .sort-select, #opening-draft, #opening-search) { color: #63774f; border-color: #cbd7bc; background-color: #fcfdf7; }
+html[data-theme="kyoto"] :is(.field input, .field textarea, .field select):focus { border-color: #9cb580; box-shadow: 0 0 0 2px #e8f0db; }
+html[data-theme="kyoto"] .field label { color: #6a8052; }
+html[data-theme="kyoto"] .button.secondary { color: #657951; border-color: #bfceaa; }
+html[data-theme="kyoto"] .button.secondary:hover:not(:disabled) { color: #667f4c; border-color: #a3ba88; background: #e9f1dc; }
+html[data-theme="kyoto"] .button.ghost { color: #71865b; }
+html[data-theme="kyoto"] .button.ghost:hover { color: #6f8953; background: #e9f1dc; }
+html[data-theme="kyoto"] .icon-button { color: #758e5b; border-color: #cad9b8; }
+html[data-theme="kyoto"] .icon-button:hover { color: #718e54; border-color: #aac58d; background: #e9f2dc; }
+html[data-theme="kyoto"] .drop-zone { border-color: #b5c79e; background: #edf3e4; }
+html[data-theme="kyoto"] .drop-zone:hover, html[data-theme="kyoto"] .drop-zone.drag-over { border-color: #98b37d; background: #e4eed8; }
+html[data-theme="kyoto"] .drop-symbol { border-color: #c6d6b1; color: #90aa72; }
+html[data-theme="kyoto"] .drop-title { color: #637e4c; }
+html[data-theme="kyoto"] .note-callout { border-left-color: #a5bd88; background: #edf3e3; color: #687f50; }
+html[data-theme="kyoto"] .settings-track { background: #f1f6e9; border-bottom-color: #d7e4c7; }
+html[data-theme="kyoto"] .music-toggle.is-playing { color: #76945b; border-color: #b1c99a; background: #e5f0d9; }
+html[data-theme="kyoto"] .music-status-dot { background: #94b47a; }
+html[data-theme="kyoto"] .toast { background: #fcfff4; border-color: #c4d7ae; border-left-color: #9bbd7e; color: #657e4e; }
+html[data-theme="kyoto"] .confirm-card { border: 1px solid #b8cda2; border-radius: 2px; box-shadow: 0 20px 75px #405c322b, inset 0 0 0 5px #edf4e3; }
+
+/* The photograph's dark viewing canvas stays neutral. */
+html[data-theme="kyoto"] .lightbox-topbar { background: #303c31; border-bottom: 1px solid #667c5a; }
+html[data-theme="kyoto"] .lightbox-title { color: #ccd7c1; }
+html[data-theme="kyoto"] .photo-details { background: #333f32; border-left: 1px solid #718363; }
+html[data-theme="kyoto"] .photo-details .eyebrow { padding-bottom: 22px; color: #afc59a; background: var(--kyoto-wave) left bottom / 32px 16px no-repeat; }
+html[data-theme="kyoto"] .photo-details h2 { color: #e0ebd4; }
+html[data-theme="kyoto"] .photo-details .detail-row dt { color: #a6bb94; }
+html[data-theme="kyoto"] .photo-details .detail-row dd { color: #cfdfbf; }
+html[data-theme="kyoto"] .photo-details .detail-section h3 { color: #b8cca5; }
+html[data-theme="kyoto"] .photo-details :is(.caption-text, .date-source-note, .location-badge, .batch-hint) { color: #b0c99a; }
+html[data-theme="kyoto"] .photo-details .location-badge { border-color: #6f895b; }
+html[data-theme="kyoto"] .photo-details .detail-actions { border-top-color: #6c845c; }
+html[data-theme="kyoto"] .lightbox-nav { color: #bed3a8; border-color: #718c5b; background: #3c5032; }
+html[data-theme="kyoto"] .lightbox-nav:hover { color: #e3f1d2; border-color: #9cbb80; background: #506b3f; }
+html[data-theme="kyoto"] .lightbox-counter { color: #9fb68a; }
+html[data-theme="kyoto"] .lightbox .icon-button { color: #bbd0a5; border-color: #718b5d; background: transparent; }
+html[data-theme="kyoto"] .lightbox .icon-button:hover { color: #e2f2d1; border-color: #9fbe84; background: #4b663b; }
+html[data-theme="kyoto"] .lightbox .icon-button.active { color: #ed626d; }
+html[data-theme="kyoto"] .lightbox .export-photo-button { color: #dfeecf; border-color: #839d6b; background: #485e38; }
+html[data-theme="kyoto"] .lightbox .export-photo-button:hover { color: #f1fbe6; border-color: #acc994; background: #607d49; }
+html[data-theme="kyoto"] .lightbox .button.secondary { color: #bcd6a5; border-color: #7c9a62; background: #3e5530; }
+html[data-theme="kyoto"] .lightbox .button.secondary:hover { color: #e1f2cf; border-color: #abc98e; background: #526f3e; }
+html[data-theme="kyoto"] .lightbox .button.ghost { color: #adc995; }
+html[data-theme="kyoto"] .lightbox .button.ghost:hover { color: #e1f2cf; background: #4b6539; }
+
+/* An automatic, quiet dedication within a paper-and-lattice frame. */
+html[data-theme="kyoto"] .daily-opening-screen { color: #5e744b; background: #f7f5ed; }
+html[data-theme="kyoto"] .daily-opening-screen::before {
+  content: ""; position: absolute; inset: 28px; border: 1px solid #cbd4bc;
+  background: var(--kyoto-lattice) left top / 8px 32px repeat-y, var(--kyoto-lattice) right top / 8px 32px repeat-y;
+  opacity: .55; pointer-events: none;
+}
+html[data-theme="kyoto"] .daily-opening-screen::after {
+  content: ""; position: absolute; right: 50px; bottom: 45px; width: 162px; height: 117px;
+  background: var(--kyoto-maple) center / contain no-repeat; opacity: .65; pointer-events: none;
+}
+html[data-theme="kyoto"] .daily-opening-mark svg { stroke: #899f72; }
+html[data-theme="kyoto"] #daily-opening-date { color: #768b60; }
+html[data-theme="kyoto"] .daily-loading-line { background: #dbe5cd; }
+html[data-theme="kyoto"] .daily-loading-line::after { background: #a1bc83; }
+html[data-theme="kyoto"] .empty-art { background: url('/assets/kyoto-machiya.svg') center / contain no-repeat; mask-image: none; }
+html[data-theme="kyoto"] .empty-art > img { display: none; }
+html[data-theme="kyoto"] :is(.empty-small h2, .empty-state h2) { color: #758f5e; }
+
+/* Four equally sized choices keep the full theme library easy to scan. */
+.settings-theme-grid-four .theme-preview { height: 120px; }
+.settings-theme-grid-four .theme-preview-classic > img { width: 210px; height: 140px; right: -9px; top: -12px; }
+.settings-theme-grid-four .theme-card[data-theme="greek"] { grid-column: auto; display: block; }
+.settings-theme-grid-four .theme-preview-greek { border-right: 0; border-bottom: 1px solid #cadde3; }
+.settings-theme-grid-four .theme-card[data-theme="greek"] .theme-info { padding: 13px 15px; }
+.settings-theme-grid-four .theme-card[data-theme="greek"] .theme-selected-mark { top: 14px; right: 12px; }
+.theme-preview-kyoto { background: #f7f5ed; border-color: #d5dcc9; }
+.theme-preview-kyoto .theme-preview-sidebar { background: #e4ead8; border-color: #c7d3b7; }
+.theme-preview-kyoto .theme-preview-copy > span { background: #95aa7d; }
+.theme-preview-kyoto > img { width: 185px; height: 106px; right: 0; top: 5px; }
+.theme-preview-kyoto::after {
+  content: ""; position: absolute; left: 31px; right: 0; bottom: 3px; height: 11px;
+  background: url('/assets/kyoto-seigaiha.svg') center / 24px 12px repeat-x; opacity: .4; pointer-events: none;
+}
+
+@media (max-height: 800px) {
+  .settings-theme-grid-four .theme-preview { height: 100px; }
+  .settings-theme-grid-four .theme-preview-classic > img { width: 185px; height: 123px; right: -2px; top: -12px; }
+  .settings-theme-grid-four .theme-preview-italian > img { height: 98px; top: 0; }
+  .settings-theme-grid-four .theme-preview-greek > img { height: 96px; top: 0; }
+  .settings-theme-grid-four .theme-preview-kyoto > img { height: 98px; top: 0; }
+}
+@media (max-width: 1100px) {
+  html[data-theme="kyoto"] .intro-art { flex-basis: 240px; width: 240px; height: 154px; }
+  html[data-theme="kyoto"] .atlas-panel { padding: 12px; }
+}
+@media (max-width: 760px) {
+  html[data-theme="kyoto"] .sidebar::after { display: none; }
+  html[data-theme="kyoto"] .intro-art { flex-basis: 175px; width: 175px; height: 140px; }
+  html[data-theme="kyoto"] .page-heading:not(:has(.heading-actions)) { padding-right: 90px; }
+  html[data-theme="kyoto"] .page-heading:not(:has(.heading-actions))::before { width: 80px; height: 75px; opacity: .6; }
+  html[data-theme="kyoto"] .journal-body { padding-left: 12px; padding-right: 12px; }
+  html[data-theme="kyoto"] .colors-period-body { padding: 12px; }
+  html[data-theme="kyoto"] .daily-opening-screen::after { right: 34px; bottom: 34px; width: 96px; height: 69px; }
+}
+@media (max-width: 480px) {
+  html[data-theme="kyoto"] .intro-art { flex-basis: 115px; width: 115px; height: 115px; }
+  html[data-theme="kyoto"] .page-heading:not(:has(.heading-actions)) { padding-right: 0; }
+  html[data-theme="kyoto"] .page-heading:not(:has(.heading-actions))::before { display: none; }
+  html[data-theme="kyoto"] .atlas-panel { padding: 8px; }
+  .settings-theme-grid-four .theme-preview-kyoto > img { width: 145px; right: -9px; }
+}
